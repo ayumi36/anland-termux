@@ -124,6 +124,9 @@ echo $TERMUX_APP__APK_RELEASE
 
 3. 进入实际运行环境后，下载并运行该一键脚本：[startplasma-anland.sh](../scripts/startplasma-anland.sh)
 
+> [!TIP]
+> 为了使音频服务正常运行，执行该脚本前请先确认 PipeWire 已安装。如 Termux 中的 `pipewire` 包，Debian/Ubuntu 中的 `pipewire-audio` 包。
+
    ```sh
    curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startplasma-anland.sh
    chmod +x ./startplasma-anland.sh

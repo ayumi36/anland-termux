@@ -124,6 +124,9 @@ For example, to run Anland: Termux in a Debian 13 PRoot container, download thes
 
 3. After entering the runtime environment, download and run this helper script: [startplasma-anland.sh](../scripts/startplasma-anland.sh)
 
+> [!TIP]
+> To ensure that audio services work correctly, make sure PipeWire is installed before running the script. For example, install the `pipewire` package in Termux or the `pipewire-audio` package in Debian/Ubuntu.
+
    ```sh
    curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startplasma-anland.sh
    chmod +x ./startplasma-anland.sh
