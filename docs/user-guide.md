@@ -134,3 +134,68 @@ For example, to run Anland: Termux in a Debian 13 PRoot container, download thes
    ```
 
 4. Switch to the “Anland Termux” app on Android and enjoy your Wayland desktop.
+
+> [!TIP]
+> If the helper script cannot enter the desktop or the desktop session is unstable, you can manually start the desktop session with the following commands for your runtime environment. **Pay close attention to the comments in the commands and choose the appropriate options.** These commands currently cannot start the PipeWire audio service. And you must also disable microphone and camera forwarding in the “Anland Termux” app’s settings.
+>
+> * In a PRoot / Chroot / LXC container:
+>
+>   ```sh
+>   #!/bin/bash
+>   sudo chmod -R 777 /tmp/anland
+>   killall plasmashell > /dev/null 2>&1; killall kwin_wayland > /dev/null 2>&1; killall startplasma > /dev/null 2>&1;
+>   unset DISPLAY
+>   export QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=KDE XDG_SESSION_DESKTOP=KDE
+>   export ANLAND_SOCKET=/tmp/anland/display_daemon.sock ANLAND=1
+>
+>   # For PRoot container:
+>   export ANLAND_NO_DRM_DEVICE=1 EGL_PLATFORM=surfaceless
+>
+>   # For Chroot/LXC container:
+>   export ANLAND_DRM_DEVICE=/dev/dri/renderD128
+>
+>   # Enable Freedreno (KGSL) driver for devices with Adreno GPU
+>   export MESA_LOADER_DRIVER_OVERRIDE=kgsl TURNIP_KMD=kgsl GALLIUM_DRIVER=freedreno FD_FORCE_KGSL=1 XWAYLAND_FORCE_KGSL_SURFACELESS=1
+>
+>   export XDG_RUNTIME_DIR=/run/user/$(id -u)
+>   sudo mkdir -p /run/user/$(id -u)
+>   sudo chown $(id -un):$(id -gn) /run/user/$(id -u)
+>   chmod 700 /run/user/$(id -u)
+>   rm -f $XDG_RUNTIME_DIR/wayland-* > /dev/null 2>&1
+>   sudo mkdir -p /tmp/.X11-unix
+>   sudo chmod 1777 /tmp/.X11-unix
+>   dbus-run-session startplasma-wayland > /dev/null 2>&1
+>
+>   # If startplasma-wayland cannot enter the desktop normally (especially on devices without Adreno GPU), you can use plasmashell
+>   dbus-run-session -- bash -lc '
+>       kwin_wayland plasmashell > /dev/null 2>&1 &
+>       sleep 2
+>       konsole > /dev/null 2>&1
+>       wait
+>   '
+>   ```
+>
+> * In the Termux native environment:
+>
+>   ```sh
+>   #!/data/data/com.termux/files/usr/bin/bash
+>   mkdir -p $TMPDIR/run
+>   chown -R $(id -un):$(id -gn) $TMPDIR/run
+>   chmod -R 700 $TMPDIR/run
+>   mkdir -p $TMPDIR/.X11-unix
+>   chmod 1777 $TMPDIR/.X11-unix
+>   killall anland > /dev/null 2>&1
+>   anland > /dev/null 2>&1 &
+>   killall plasmashell > /dev/null 2>&1; killall kwin_wayland > /dev/null 2>&1; killall startplasma > /dev/null 2>&1;
+>   unset DISPLAY
+>   unset PULSE_SERVER
+>   export XDG_RUNTIME_DIR=$TMPDIR/run
+>   export QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=KDE XDG_SESSION_DESKTOP=KDE
+>   export ANLAND_SOCKET=$TMPDIR/anland/display_daemon.sock ANLAND=1 ANLAND_NO_DRM_DEVICE=1 EGL_PLATFORM=surfaceless
+>
+>   # Enable Freedreno (KGSL) driver for devices with Adreno GPU
+>   export MESA_LOADER_DRIVER_OVERRIDE=kgsl TURNIP_KMD=kgsl GALLIUM_DRIVER=freedreno FD_FORCE_KGSL=1 XWAYLAND_FORCE_KGSL_SURFACELESS=1
+>
+>   rm -f $XDG_RUNTIME_DIR/wayland-* > /dev/null 2>&1
+>   dbus-run-session startplasma-wayland > /dev/null 2>&1
+>   ```

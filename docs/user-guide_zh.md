@@ -134,3 +134,68 @@ echo $TERMUX_APP__APK_RELEASE
    ```
 
 4. 切换到 Android 的“Anland Termux”应用，开始享受 Wayland 桌面。
+
+> [!TIP]
+> 如果使用一键脚本无法进入桌面或者桌面会话容易崩溃的话，则可以根据实际运行环境使用以下的命令手动启动桌面会话。**请留意命令中的注释，根据实际情况进行选择。** 目前以下命令的限制是无法启动 PipeWire 音频服务，还需要在“Anland Termux”应用的设置里关闭麦克风和摄像头的转发。
+>
+> * 在 PRoot / Chroot / LXC 容器内：
+>
+>   ```sh
+>   #!/bin/bash
+>   sudo chmod -R 777 /tmp/anland
+>   killall plasmashell > /dev/null 2>&1; killall kwin_wayland > /dev/null 2>&1; killall startplasma > /dev/null 2>&1;
+>   unset DISPLAY
+>   export QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=KDE XDG_SESSION_DESKTOP=KDE
+>   export ANLAND_SOCKET=/tmp/anland/display_daemon.sock ANLAND=1
+>   
+>   # 对于 PRoot 容器：
+>   export ANLAND_NO_DRM_DEVICE=1 EGL_PLATFORM=surfaceless
+>   
+>   # 对于 Chroot/LXC 容器：
+>   export ANLAND_DRM_DEVICE=/dev/dri/renderD128
+>   
+>   # 为搭载 Adreno GPU 的设备启用 Freedreno (KGSL) 驱动
+>   export MESA_LOADER_DRIVER_OVERRIDE=kgsl TURNIP_KMD=kgsl GALLIUM_DRIVER=freedreno FD_FORCE_KGSL=1 XWAYLAND_FORCE_KGSL_SURFACELESS=1
+>   
+>   export XDG_RUNTIME_DIR=/run/user/$(id -u)
+>   sudo mkdir -p /run/user/$(id -u)
+>   sudo chown $(id -un):$(id -gn) /run/user/$(id -u)
+>   chmod 700 /run/user/$(id -u)
+>   rm -f $XDG_RUNTIME_DIR/wayland-* > /dev/null 2>&1
+>   sudo mkdir -p /tmp/.X11-unix
+>   sudo chmod 1777 /tmp/.X11-unix
+>   dbus-run-session startplasma-wayland > /dev/null 2>&1
+>   
+>   # 如果 startplasma-wayland 不能正常进入桌面（尤其在不是 Adreno GPU 的设备上），则可以尝试 plasmashell
+>   dbus-run-session -- bash -lc '
+>       kwin_wayland plasmashell > /dev/null 2>&1 &
+>       sleep 2
+>       konsole > /dev/null 2>&1
+>       wait
+>   '
+>   ```
+>
+> * 在 Termux 原生环境：
+>
+>   ```sh
+>   #!/data/data/com.termux/files/usr/bin/bash
+>   mkdir -p $TMPDIR/run
+>   chown -R $(id -un):$(id -gn) $TMPDIR/run
+>   chmod -R 700 $TMPDIR/run
+>   mkdir -p $TMPDIR/.X11-unix
+>   chmod 1777 $TMPDIR/.X11-unix
+>   killall anland > /dev/null 2>&1
+>   anland > /dev/null 2>&1 &
+>   killall plasmashell > /dev/null 2>&1; killall kwin_wayland > /dev/null 2>&1; killall startplasma > /dev/null 2>&1;
+>   unset DISPLAY
+>   unset PULSE_SERVER
+>   export XDG_RUNTIME_DIR=$TMPDIR/run
+>   export QT_QPA_PLATFORM=wayland XDG_CURRENT_DESKTOP=KDE XDG_SESSION_DESKTOP=KDE
+>   export ANLAND_SOCKET=$TMPDIR/anland/display_daemon.sock ANLAND=1 ANLAND_NO_DRM_DEVICE=1 EGL_PLATFORM=surfaceless
+>   
+>   # 为搭载 Adreno GPU 的设备启用 Freedreno (KGSL) 驱动
+>   export MESA_LOADER_DRIVER_OVERRIDE=kgsl TURNIP_KMD=kgsl GALLIUM_DRIVER=freedreno FD_FORCE_KGSL=1 XWAYLAND_FORCE_KGSL_SURFACELESS=1
+>   
+>   rm -f $XDG_RUNTIME_DIR/wayland-* > /dev/null 2>&1
+>   dbus-run-session startplasma-wayland > /dev/null 2>&1
+>   ```
