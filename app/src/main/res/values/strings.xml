@@ -9,7 +9,9 @@
     <string name="section_custom_layout">Custom Extra Keys Layout</string>
     <string name="section_touchpad">Touchpad Settings</string>
     <string name="section_connection">Connection</string>
+    <string name="section_display">Display</string>
     <string name="section_resolution">Display Resolution</string>
+    <string name="section_screen_orientation">Screen Orientation</string>
     <string name="section_notification">Settings Notification</string>
 
     <!-- Settings home: category rows and back navigation -->
@@ -19,7 +21,7 @@
     <string name="cat_touchpad_title">Touchpad &amp; Mouse</string>
     <string name="cat_touchpad_subtitle">Touchpad mode &amp; pointer sensitivity</string>
     <string name="cat_connection_subtitle">Socket, root, mic, camera &amp; audio latency</string>
-    <string name="cat_resolution_subtitle">Output resolution &amp; presets</string>
+    <string name="cat_display_subtitle">Resolution &amp; screen orientation</string>
     <string name="cat_general_title">General</string>
     <string name="cat_general_subtitle">Settings notification</string>
 
@@ -76,6 +78,8 @@
     <string name="height_hint">Height (e.g. 1080)</string>
     <string name="resolution_hint">Pick a preset or enter values manually. Leave 0 for native resolution. \"Screen ×\" scales this device\'s panel (landscape). Takes effect on next connect.</string>
 
+    <string name="screen_orientation_hint">Controls the desktop view orientation. Takes effect when you return to the desktop.</string>
+
     <!-- Settings notification -->
     <string name="notification_switch">Show settings notification</string>
     <string name="notification_hint">Show a persistent notification while the app is open; tapping it jumps straight to Settings. Turn off to hide it. Takes effect on next return to the app.</string>
@@ -127,5 +131,13 @@
         <item>Screen × 0.75</item>
         <item>Screen × 0.5</item>
         <item>Screen × 0.25</item>
+    </string-array>
+
+    <string-array name="screen_orientation_labels">
+        <item>Auto</item>
+        <item>Portrait</item>
+        <item>Landscape</item>
+        <item>Reverse portrait</item>
+        <item>Reverse landscape</item>
     </string-array>
 </resources>

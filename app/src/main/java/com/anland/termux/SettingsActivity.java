@@ -55,8 +55,14 @@ public class SettingsActivity extends Activity {
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
     private static final String KEY_KEYBOARD_FLOATING = "keyboard_floating";
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
+    private static final String KEY_SCREEN_ORIENTATION = "screen_orientation";
     private static final String DEFAULT_SOCKET_PATH = "/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock";
     private static final int UNBOUND = -1;
+
+    // Stored values match Termux:X11's forceOrientation preference.
+    private static final String[] SCREEN_ORIENTATIONS = {
+        "auto", "portrait", "landscape", "reverse portrait", "reverse landscape"
+    };
 
     // ===== 新增：触摸板 Key =====
     private static final String KEY_TOUCHPAD_MODE = "touchpad_mode";
@@ -67,7 +73,7 @@ public class SettingsActivity extends Activity {
     private static final int[] LATENCY_MS = {0, 1, 3, 5, 10, 20};
 
     // Which secondary page is on screen. Back returns HOME -> exits the activity.
-    private enum Page { HOME, KEYBOARD, TOUCHPAD, CONNECTION, RESOLUTION, GENERAL }
+    private enum Page { HOME, KEYBOARD, TOUCHPAD, CONNECTION, DISPLAY, GENERAL }
     private Page currentPage = Page.HOME;
 
     private Button bindButton;
@@ -153,8 +159,8 @@ public class SettingsActivity extends Activity {
             R.string.cat_touchpad_subtitle, this::showTouchpadPage);
         addCategoryRow(root, R.string.section_connection,
             R.string.cat_connection_subtitle, this::showConnectionPage);
-        addCategoryRow(root, R.string.section_resolution,
-            R.string.cat_resolution_subtitle, this::showResolutionPage);
+        addCategoryRow(root, R.string.section_display,
+            R.string.cat_display_subtitle, this::showDisplayPage);
         addCategoryRow(root, R.string.cat_general_title,
             R.string.cat_general_subtitle, this::showGeneralPage);
 
@@ -271,10 +277,11 @@ public class SettingsActivity extends Activity {
         setContent(root);
     }
 
-    private void showResolutionPage() {
-        currentPage = Page.RESOLUTION;
-        LinearLayout root = newPage(R.string.section_resolution);
+    private void showDisplayPage() {
+        currentPage = Page.DISPLAY;
+        LinearLayout root = newPage(R.string.section_display);
         addResolutionSection(root);
+        addScreenOrientationSection(root);
         setContent(root);
     }
 
@@ -699,6 +706,13 @@ public class SettingsActivity extends Activity {
     private void addResolutionSection(LinearLayout root) {
     SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
+    TextView title = new TextView(this);
+    title.setText(R.string.section_resolution);
+    title.setTextSize(16);
+    title.setTypeface(Typeface.DEFAULT_BOLD);
+    title.setPadding(0, 0, 0, dp(8));
+    root.addView(title);
+
     // Width / height fields. Created first (but added below the preset picker) so
     // the picker can populate them; their TextWatchers are the single source of
     // truth that persists custom_width/custom_height.
@@ -763,6 +777,51 @@ public class SettingsActivity extends Activity {
     hint.setTextColor(Color.GRAY);
     hint.setPadding(0, dp(4), 0, 0);
     root.addView(hint);
+    }
+
+    private void addScreenOrientationSection(LinearLayout root) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        TextView title = new TextView(this);
+        title.setText(R.string.section_screen_orientation);
+        title.setTextSize(16);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setPadding(0, dp(24), 0, dp(8));
+        root.addView(title);
+
+        Spinner orientationSpinner = new Spinner(this);
+        orientationSpinner.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item,
+            getResources().getStringArray(R.array.screen_orientation_labels)));
+
+        String current = prefs.getString(KEY_SCREEN_ORIENTATION, SCREEN_ORIENTATIONS[0]);
+        int selected = 0;
+        for (int i = 0; i < SCREEN_ORIENTATIONS.length; i++) {
+            if (SCREEN_ORIENTATIONS[i].equals(current)) {
+                selected = i;
+                break;
+            }
+        }
+        orientationSpinner.setSelection(selected);
+        orientationSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit()
+                    .putString(KEY_SCREEN_ORIENTATION, SCREEN_ORIENTATIONS[position])
+                    .apply();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        root.addView(orientationSpinner);
+
+        TextView hint = new TextView(this);
+        hint.setText(R.string.screen_orientation_hint);
+        hint.setTextSize(12);
+        hint.setTextColor(Color.GRAY);
+        hint.setPadding(0, dp(4), 0, 0);
+        root.addView(hint);
     }
 
     // Maps a res_preset_labels index to {width, height}, or null for the index-0
