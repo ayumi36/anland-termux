@@ -7,6 +7,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManager;
 import android.content.SharedPreferences;
@@ -72,6 +73,7 @@ public class MainActivity extends Activity
     private boolean mKeyboardFloating = false;
     // Persistent "tap to open Settings" notification, toggleable in Settings > General.
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
+    private static final String KEY_SCREEN_ORIENTATION = "screen_orientation";
     // System soft-keyboard bridge: hidden input, text forwarding and toggle.
     private SystemIME systemIme;
     private int mImeBottom = 0;   // last IME bottom inset
@@ -151,6 +153,8 @@ public class MainActivity extends Activity
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        applyScreenOrientation();
 
         sInstance = this;
         clipboard = new Clipboard(this);
@@ -335,6 +339,8 @@ public class MainActivity extends Activity
     protected void onResume() {
         super.onResume();
 
+        applyScreenOrientation();
+
         // Show settings notification while in foreground, unless disabled in Settings.
         if (getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getBoolean(KEY_NOTIFICATION_ENABLED, true)) {
@@ -395,6 +401,32 @@ public class MainActivity extends Activity
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         isTouchpadMode = prefs.getBoolean(KEY_TOUCHPAD_MODE, false);
         virtualTouchpad.setAccelStrength(prefs.getFloat(KEY_MOUSE_ACCEL, 1.0f));
+    }
+
+    private void applyScreenOrientation() {
+        String orientation = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getString(KEY_SCREEN_ORIENTATION, "auto");
+        int requestedOrientation;
+        switch (orientation) {
+            case "portrait":
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+                break;
+            case "landscape":
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+                break;
+            case "reverse portrait":
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT;
+                break;
+            case "reverse landscape":
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+                break;
+            default:
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
+                break;
+        }
+
+        if (getRequestedOrientation() != requestedOrientation)
+            setRequestedOrientation(requestedOrientation);
     }
 
     @Override
