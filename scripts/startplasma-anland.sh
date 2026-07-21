@@ -6,6 +6,7 @@ NC='\033[0m'
 
 ANLAND_HAVE_KGSL=0
 ANLAND_HAVE_DRM=0
+ANLAND_PLASMA_DEBUG=${ANLAND_PLASMA_DEBUG:-0}
 
 if [[ -r /dev/kgsl-3d0 ]]; then
     ANLAND_HAVE_KGSL=1
@@ -45,6 +46,14 @@ enable_kgsl() {
 
 show_starting_message() {
     printf '%b\n' "${GREEN}Starting KDE Plasma. Please switch to the \"Anland Termux\" app.${NC}"
+}
+
+run_plasma_command() {
+    if [[ $ANLAND_PLASMA_DEBUG -eq 1 ]]; then
+        "$@"
+    else
+        "$@" > /dev/null 2>&1
+    fi
 }
 
 wait_for_socket() {
@@ -220,7 +229,7 @@ start_termux_native() {
 
     rm -f "$XDG_RUNTIME_DIR"/wayland-* > /dev/null 2>&1
     show_starting_message
-    dbus-run-session startplasma-wayland > /dev/null 2>&1
+    run_plasma_command dbus-run-session startplasma-wayland
 }
 
 run_container_session() {
@@ -271,7 +280,7 @@ start_container() {
     else
         unset ANLAND_SOFTWARE_SESSION
     fi
-    dbus-run-session -- "$BASH" "${BASH_SOURCE[0]}" --container-session > /dev/null 2>&1
+    run_plasma_command dbus-run-session -- "$BASH" "${BASH_SOURCE[0]}" --container-session
 }
 
 if [[ ${1:-} == --container-session ]]; then
