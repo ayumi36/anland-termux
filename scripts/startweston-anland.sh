@@ -9,6 +9,8 @@ NC='\033[0m'
 
 WESTON_SOCKET=${WESTON_SOCKET:-wayland-anland}
 ANLAND_WESTON_SCALE=${ANLAND_WESTON_SCALE:-1}
+ANLAND_WESTON_START_ATTEMPTS=${ANLAND_WESTON_START_ATTEMPTS:-3}
+ANLAND_WESTON_RETRY_WINDOW=${ANLAND_WESTON_RETRY_WINDOW:-60}
 ANLAND_HAVE_KGSL=0
 
 if [[ -r /dev/kgsl-3d0 ]]; then
@@ -25,6 +27,8 @@ show_usage() {
         '  ANLAND_WESTON_SCALE        Output scale as a positive integer (default: 1)' \
         '  ANLAND_WESTON_XWAYLAND=0   Disable Xwayland' \
         '  ANLAND_WESTON_DEBUG=1      Enable the Weston debug extension' \
+        '  ANLAND_WESTON_START_ATTEMPTS  Maximum startup attempts (default: 3)' \
+        '  ANLAND_WESTON_RETRY_WINDOW    Retry crashes within this many seconds (default: 60)' \
         '  ANLAND_AUDIO_DEBUG=1       Enable verbose PipeWire/WirePlumber logs' \
         '  ANLAND_LOG_DIR             Directory for PipeWire service logs'
 }
@@ -40,6 +44,18 @@ print_warning() {
 validate_weston_scale() {
     if [[ ! $ANLAND_WESTON_SCALE =~ ^[1-9][0-9]*$ ]]; then
         print_error "ANLAND_WESTON_SCALE must be a positive integer: $ANLAND_WESTON_SCALE"
+        return 1
+    fi
+}
+
+validate_retry_settings() {
+    if [[ ! $ANLAND_WESTON_START_ATTEMPTS =~ ^[1-9][0-9]*$ ]]; then
+        print_error "ANLAND_WESTON_START_ATTEMPTS must be a positive integer: $ANLAND_WESTON_START_ATTEMPTS"
+        return 1
+    fi
+
+    if [[ ! $ANLAND_WESTON_RETRY_WINDOW =~ ^[1-9][0-9]*$ ]]; then
+        print_error "ANLAND_WESTON_RETRY_WINDOW must be a positive integer: $ANLAND_WESTON_RETRY_WINDOW"
         return 1
     fi
 }
@@ -75,6 +91,62 @@ wait_for_socket() {
     done
 
     [[ -S $socket_path ]]
+}
+
+process_matches_anland_socket() {
+    local proc_dir=$1
+    local socket_path=$2
+    local process_comm entry
+    local -a process_args=()
+
+    [[ -r $proc_dir/comm && -r $proc_dir/cmdline ]] || return 1
+    read -r process_comm < "$proc_dir/comm" || return 1
+    [[ $process_comm == anland ]] || return 1
+
+    while IFS= read -r -d '' entry; do
+        process_args+=("$entry")
+    done < "$proc_dir/cmdline"
+
+    if [[ ${#process_args[@]} -eq 1 ]]; then
+        [[ $socket_path == "$TMPDIR/anland/display_daemon.sock" ]]
+    elif [[ ${process_args[1]:-} == --socket ]]; then
+        [[ ${process_args[2]:-} == "$socket_path" ]]
+    else
+        [[ ${process_args[1]:-} == "$socket_path" ]]
+    fi
+}
+
+anland_daemon_uses_socket() {
+    local socket_path=$1
+    local proc_dir
+
+    for proc_dir in /proc/[0-9]*; do
+        process_matches_anland_socket "$proc_dir" "$socket_path" && return 0
+    done
+
+    return 1
+}
+
+stop_anland_daemon() {
+    local socket_path=$1
+    local proc_dir
+    local attempts=50
+
+    for proc_dir in /proc/[0-9]*; do
+        if process_matches_anland_socket "$proc_dir" "$socket_path"; then
+            kill "${proc_dir##*/}" > /dev/null 2>&1 || true
+        fi
+    done
+
+    while anland_daemon_uses_socket "$socket_path" && [[ $attempts -gt 0 ]]; do
+        sleep 0.1
+        attempts=$((attempts - 1))
+    done
+
+    if anland_daemon_uses_socket "$socket_path"; then
+        print_error "The existing Anland daemon did not stop: $socket_path"
+        return 1
+    fi
 }
 
 set_common_environment() {
@@ -266,6 +338,8 @@ clean_weston_socket() {
 }
 
 prepare_termux_native() {
+    local anland_pid
+
     if [[ -z ${TMPDIR:-} ]]; then
         print_error "TMPDIR is not set in the Termux environment."
         return 1
@@ -278,10 +352,18 @@ prepare_termux_native() {
     mkdir -p "${ANLAND_SOCKET%/*}"
 
     require_command anland anland
-    pkill -x -u "$(id -u)" anland > /dev/null 2>&1 || true
+
+    if [[ -S $ANLAND_SOCKET ]] && anland_daemon_uses_socket "$ANLAND_SOCKET"; then
+        printf '%b\n' "${GREEN}Reusing the existing Anland daemon at $ANLAND_SOCKET.${NC}"
+        return 0
+    fi
+
+    stop_anland_daemon "$ANLAND_SOCKET"
+    rm -f -- "$ANLAND_SOCKET"
     anland --socket "$ANLAND_SOCKET" \
         > "${ANLAND_SOCKET%/*}/anland.log" 2>&1 &
-    if ! wait_for_socket "$ANLAND_SOCKET"; then
+    anland_pid=$!
+    if ! wait_for_socket "$ANLAND_SOCKET" || ! kill -0 "$anland_pid" 2> /dev/null; then
         print_error "The Anland daemon failed to create $ANLAND_SOCKET. See ${ANLAND_SOCKET%/*}/anland.log."
         return 1
     fi
@@ -336,8 +418,37 @@ run_weston_session() {
     weston "${weston_args[@]}" "$@"
 }
 
+run_weston_with_retries() {
+    local attempt=1
+    local status elapsed started_at
+
+    while true; do
+        started_at=$SECONDS
+        if dbus-run-session -- "$BASH" "${BASH_SOURCE[0]}" --weston-session "$@"; then
+            return 0
+        else
+            status=$?
+        fi
+        elapsed=$((SECONDS - started_at))
+
+        if [[ $attempt -ge $ANLAND_WESTON_START_ATTEMPTS ]] ||
+            [[ $elapsed -gt $ANLAND_WESTON_RETRY_WINDOW ]] ||
+            [[ $status -ne 134 && $status -ne 139 ]]; then
+            return "$status"
+        fi
+
+        attempt=$((attempt + 1))
+        print_warning "Weston crashed during startup (status $status after ${elapsed}s); retrying automatically ($attempt/$ANLAND_WESTON_START_ATTEMPTS)."
+        stop_weston
+        stop_audio_services
+        clean_weston_socket
+        sleep 1
+    done
+}
+
 start_weston() {
     validate_weston_scale
+    validate_retry_settings
     require_command weston weston
     require_command dbus-run-session dbus
     require_command install coreutils
@@ -356,12 +467,13 @@ start_weston() {
     fi
 
     export ANLAND_SOCKET WESTON_SOCKET ANLAND_WESTON_SCALE XDG_RUNTIME_DIR
+    export ANLAND_WESTON_START_ATTEMPTS ANLAND_WESTON_RETRY_WINDOW
     stop_weston
     stop_audio_services
     clean_weston_socket
 
     printf '%b\n' "${GREEN}Starting Weston. Please switch to the \"Anland Termux\" app.${NC}"
-    dbus-run-session -- "$BASH" "${BASH_SOURCE[0]}" --weston-session "$@"
+    run_weston_with_retries "$@"
 }
 
 case ${1:-} in
