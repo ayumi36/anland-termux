@@ -16,11 +16,11 @@ Use [Anland](https://github.com/superturtlee/anland) in Termux, including **Term
 
 ### Wayland compositor support
 
-| | KWin |
-| :---: | :---: |
-| Termux native | ✔️ |
-| Debian 13 | ✔️ |
-| Ubuntu 26.04 LTS | ✔️ |
+| | KWin | Weston |
+| :---: | :---: | :---: |
+| Termux native | ✔️ | ✔️ |
+| Debian 13 | ✔️ | ✔️ |
+| Ubuntu 26.04 LTS | ✔️ | ✔️ |
 
 ### Processor support
 
