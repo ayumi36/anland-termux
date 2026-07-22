@@ -11,6 +11,14 @@ on:
         options:
           - Debian 13
           - Ubuntu 26.04
+      desktop:
+        description: 'Desktop Environment'
+        required: true
+        default: 'KDE Plasma'
+        type: choice
+        options:
+          - KDE Plasma
+          - Weston
 
 env:
   REGISTRY: ghcr.io
@@ -33,6 +41,7 @@ jobs:
         id: config
         env:
           DISTRIBUTION: ${{ inputs.distribution }}
+          DESKTOP: ${{ inputs.desktop }}
         run: |
           set -euo pipefail
 
@@ -40,17 +49,11 @@ jobs:
             'Debian 13')
               distribution=debian
               version=trixie
-              dockerfile=images/debian.Dockerfile
-              image_name=debian
-              tag=trixie-anland-plasma
               base_version_arg=DEBIAN_VERSION
               ;;
             'Ubuntu 26.04')
               distribution=ubuntu
               version=resolute
-              dockerfile=images/ubuntu.Dockerfile
-              image_name=ubuntu
-              tag=resolute-anland-plasma
               base_version_arg=UBUNTU_VERSION
               ;;
             *)
@@ -59,8 +62,29 @@ jobs:
               ;;
           esac
 
-          kwin_url=$(jq -er --arg distribution "$distribution" --arg version "$version" \
-            '.kwin.distributions[$distribution][$version].arm64' images/packages.json)
+          case "$DESKTOP" in
+            'KDE Plasma')
+              desktop_variant=plasma
+              desktop_package=kwin
+              desktop_url_arg=KWIN_URL
+              ;;
+            Weston)
+              desktop_variant=weston
+              desktop_package=weston
+              desktop_url_arg=WESTON_URL
+              ;;
+            *)
+              echo "Unsupported desktop environment: $DESKTOP" >&2
+              exit 1
+              ;;
+          esac
+
+          dockerfile="images/${distribution}-${desktop_variant}.Dockerfile"
+          image_name=$distribution
+          tag="${version}-anland-${desktop_variant}"
+
+          desktop_url=$(jq -er --arg package "$desktop_package" --arg distribution "$distribution" --arg version "$version" \
+            '.[$package].distributions[$distribution][$version].arm64' images/packages.json)
           xwayland_url=$(jq -er --arg distribution "$distribution" --arg version "$version" \
             '.xwayland.distributions[$distribution][$version].arm64' images/packages.json)
           mesa_url=$(jq -er --arg distribution "$distribution" --arg version "$version" \
@@ -72,7 +96,8 @@ jobs:
             echo "tag=$tag"
             echo "base_version_arg=$base_version_arg"
             echo "base_version=$version"
-            echo "kwin_url=$kwin_url"
+            echo "desktop_url_arg=$desktop_url_arg"
+            echo "desktop_url=$desktop_url"
             echo "xwayland_url=$xwayland_url"
             echo "mesa_url=$mesa_url"
           } >> "$GITHUB_OUTPUT"
@@ -104,7 +129,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             ${{ steps.config.outputs.base_version_arg }}=${{ steps.config.outputs.base_version }}
-            KWIN_URL=${{ steps.config.outputs.kwin_url }}
+            ${{ steps.config.outputs.desktop_url_arg }}=${{ steps.config.outputs.desktop_url }}
             XWAYLAND_URL=${{ steps.config.outputs.xwayland_url }}
             MESA_URL=${{ steps.config.outputs.mesa_url }}
 
