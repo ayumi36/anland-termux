@@ -1,16 +1,134 @@
 # Anland: Termux Developer Documentation
 
-## Current Shape
+**English** | [中文](developer-guide_zh.md)
 
-- Based on Anland
-- Android app: `app/`
-  - package: `com.anland.termux`
-  - label: `Anland Termux`
-  - shared UID: `com.termux`
-  - signed with `app/testkey_untrusted.jks`
-- Termux daemon: `termux/anland/`
-  - binary name: `anland`
-  - default socket: `$TMPDIR/anland/display_daemon.sock`
+---
+
+## Project Structure
+
+Based on Anland, this project connects the Android display client, the Termux daemon, and Wayland compositors in containers. Its main directories are:
+
+- `app/`: Android display app.
+  - The Java layer handles interactions including activities, settings, input, clipboard, camera, and audio.
+  - `app/src/main/jni/` contains native code for Surface, dma-buf, Unix sockets, and the JNI bridge.
+  - Its package name is `com.anland.termux` and its app name is `Anland Termux`.
+  - It uses the shared UID `com.termux` and is signed with `app/testkey_untrusted.jks` for compatibility with the GitHub version of Termux.
+- `termux/anland/`: the `anland` daemon on the Termux side, which relays control messages and file descriptors between the Android display client and the Wayland producer. Its default socket is `$TMPDIR/anland/display_daemon.sock`; if `TMPDIR` is unset, it falls back to `/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock`.
+- `packages/anland/`: draft Termux Packages recipe for building the daemon as a Termux package.
+- `scripts/`: Helper startup scripts for KDE Plasma and Weston in the Termux native environment and PRoot, Chroot, and LXC containers.
+- `images/`: ARM64 PRoot container image definitions for Debian 13 and Ubuntu 26.04. `images/packages.json` records download URLs for KWin, Weston, XWayland, and Mesa build artifacts.
+- `tools/`: local build entry points for the Android app and the Termux daemon.
+- `.github/workflows/`: GitHub Actions workflows for APKs, Debian packages, and container images.
+- `docs/`: English and Chinese user and developer documentation; Chinese files use the `_zh.md` suffix.
+- `out/`: local build output directory for APKs and the daemon; do not commit it to Git.
+
+## Debugging
+
+Set debugging variables before running the startup script. The examples below work in both the Termux native environment and containers. PRoot-Distro must be entered with `--shared-tmp`; Chroot and LXC containers must share the directory containing the Anland socket with Termux.
+
+### Helper Startup Scripts
+
+#### KDE Plasma
+
+Script: `scripts/startplasma-anland.sh`
+
+- `ANLAND_PLASMA_DEBUG=1`: stops redirecting standard output and standard error from `startplasma-wayland`, KWin, and the Plasma session, so startup logs are displayed directly in the current terminal. The default is `0`. This variable does not change Qt logging categories; for more detailed KWin logs, also set `QT_LOGGING_RULES`.
+- `ANLAND_AUDIO_DEBUG=1`: enables verbose logging for PipeWire, `pipewire-pulse`, and WirePlumber by setting the script’s `PIPEWIRE_DEBUG` and `WIREPLUMBER_DEBUG` variables. Logs are saved in the directory containing the Anland socket, usually `$TMPDIR/anland/` in Termux or `/tmp/anland/` in containers.
+
+For example, to display debug output from Plasma, KWin, and audio services at the same time:
+
+```sh
+ANLAND_PLASMA_DEBUG=1 \
+ANLAND_AUDIO_DEBUG=1 \
+QT_LOGGING_RULES='kwin*.debug=true' \
+scripts/startplasma-anland.sh
+```
+
+#### Weston
+
+Script: `scripts/startweston-anland.sh`
+
+- `ANLAND_WESTON_DEBUG=1`: adds `--debug` to Weston, enabling the `weston_debug_v1` debugging protocol and the Weston screenshot interface. It does not automatically subscribe to additional log scopes.
+- `ANLAND_AUDIO_DEBUG=1`: enables verbose logging for PipeWire, `pipewire-pulse`, and WirePlumber.
+- `ANLAND_LOG_DIR=<directory>`: sets the directory for audio-service logs; the default is `$XDG_RUNTIME_DIR/anland-logs`.
+
+For example:
+
+```sh
+ANLAND_WESTON_DEBUG=1 \
+ANLAND_AUDIO_DEBUG=1 \
+ANLAND_LOG_DIR=/tmp/anland-logs \
+scripts/startweston-anland.sh
+```
+
+> [!WARNING]
+> Weston’s `--debug` lets clients read debugging information and capture output, and may also allow malicious clients to block the compositor. Enable it only in trusted local debugging sessions, and disable it when debugging is complete.
+
+### KWin
+
+KWin uses Qt logging categories. When using the helper startup script, you must also set `ANLAND_PLASMA_DEBUG=1`; otherwise, the script discards KWin’s standard output and standard error.
+
+- `QT_LOGGING_RULES='kwin*.debug=true'`: enables all debugging categories whose names start with `kwin`, producing a large volume of logs.
+- `QT_LOGGING_RULES='kwin_core.debug=true;kwin_backend_anland.debug=true;kwin_scene_opengl.debug=true'`: enables only core, Anland backend, and OpenGL scene logs. This is suitable for most display issues in this project.
+- `KWIN_GL_DEBUG=1`: lets KWin receive all OpenGL debugging messages when the driver supports OpenGL debug output. It is usually used with `kwin_scene_opengl.debug=true`.
+- `KWIN_XWAYLAND_DEBUG=1`: sets `WAYLAND_DEBUG=1` for the XWayland instance started by KWin, printing Wayland protocol traffic between XWayland and KWin.
+- `WAYLAND_DEBUG=1 <Wayland client>`: traces Wayland protocol traffic only for the specified client. This is usually easier to analyze than enabling protocol logging for the entire desktop.
+
+A common combination for debugging the Anland backend and OpenGL initialization:
+
+```sh
+ANLAND_PLASMA_DEBUG=1 \
+KWIN_GL_DEBUG=1 \
+QT_LOGGING_RULES='kwin_core.debug=true;kwin_backend_anland.debug=true;kwin_scene_opengl.debug=true' \
+scripts/startplasma-anland.sh 2>&1 | tee kwin-anland.log
+```
+
+### Weston
+
+`startweston-anland.sh` passes additional command-line arguments through to Weston unchanged. In addition to `ANLAND_WESTON_DEBUG=1`, you can use Weston’s built-in logging options:
+
+- `--log=<file>`: appends Weston logs to the specified file.
+- `--logger-scopes=<scope list>`: writes the specified scopes directly to the log. Common scopes include the general `log`, Wayland protocol traffic `proto`, and latency analysis `timeline`; available scopes depend on the Weston version and loaded backends.
+- `--flight-rec-scopes=<scope list>`: writes the specified scopes to a ring buffer, which is useful for retaining recent information before a crash.
+- `--wait-for-debugger`: pauses Weston after startup so that GDB can be attached. Send `SIGCONT` after attaching to continue execution.
+
+For example, to write general logs and protocol traffic to a file:
+
+```sh
+scripts/startweston-anland.sh \
+    --log=/tmp/weston.log \
+    --logger-scopes=log,proto
+```
+
+The `proto` log can contain window titles, input, and client interactions. Review and remove sensitive information before sharing it.
+
+### Mesa
+
+Mesa debugging variables are inherited by KWin, Weston, XWayland, and the applications they start, and can be used with either helper startup script:
+
+- `MESA_DEBUG=1`: enables Mesa error messages.
+- `MESA_LOG_LEVEL=debug`: allows debug-level logs to be emitted.
+- `EGL_LOG_LEVEL=debug`: enables detailed logs for EGL loading, configuration, and contexts.
+- `LIBGL_DEBUG=verbose`: prints LibGL/GLX driver-loading information, useful for troubleshooting OpenGL applications under XWayland.
+- `MESA_LOG_FILE_AUTO=1`: creates a separate `mesa_<process name>_<PID>_*.log` for each process in `/tmp/`, preventing multiple desktop processes from sharing one log file.
+- `TU_DEBUG=startup`: prints Turnip Vulkan driver startup and device-initialization information.
+- `FD_MESA_DEBUG=msgs,perf`: prints Freedreno Gallium driver messages and performance warnings.
+
+For example, to record Mesa and EGL logs while Plasma/KWin starts:
+
+```sh
+ANLAND_PLASMA_DEBUG=1 \
+MESA_DEBUG=1 \
+MESA_LOG_LEVEL=debug \
+EGL_LOG_LEVEL=debug \
+MESA_LOG_FILE_AUTO=1 \
+scripts/startplasma-anland.sh
+```
+
+When troubleshooting Qualcomm GPU hangs or rendering errors, you can also try options such as `TU_DEBUG=flushall`, `TU_DEBUG=syncdraw`, or `FD_MESA_DEBUG=flush` individually, according to the symptom. These options force synchronization, flush caches, or alter rendering paths; they can significantly reduce performance and mask timing issues. Do not use them in normal startup configurations or enable many of them at once.
+
+> [!NOTE]
+> Both startup scripts select a graphics path automatically based on `/dev/kgsl-3d0` and `/dev/dri/renderD128`, and clear inherited driver-selection variables such as `MESA_LOADER_DRIVER_OVERRIDE`, `TURNIP_KMD`, and `GALLIUM_DRIVER`. Do not use these variables to bypass the scripts’ device detection when collecting logs. If you need to force a graphics path, first confirm the device nodes and driver capabilities in both the Termux native environment and containers.
 
 ## Build
 
@@ -59,3 +177,172 @@ packages/anland/build.sh
 ```
 
 Related pull request: https://github.com/lfdevs/termux-packages/pull/11
+
+### XWayland
+
+- Repository: https://github.com/lfdevs/xwayland
+- Debian branch: `debian-unstable`
+- Ubuntu branch: `ubuntu/resolute`
+
+After checking out the appropriate branch in a Linux container for the corresponding distribution, use `gbp` to build the Debian package:
+
+```sh
+sudo apt update
+sudo apt build-dep -y xwayland
+sudo apt install -y git ccache build-essential devscripts fakeroot quilt git-buildpackage pristine-tar
+origtargz
+gbp buildpackage -uc -us -jauto --git-ignore-branch --git-no-pristine-tar
+```
+
+Related Termux package pull request: https://github.com/lfdevs/termux-packages/pull/13
+
+### KWin
+
+- Repository: https://github.com/lfdevs/kwin
+- Debian branch: `debian-unstable`
+- Ubuntu branch: `ubuntu/resolute`
+
+After checking out the appropriate branch in a Linux container for the corresponding distribution, use `gbp` to build the Debian package:
+
+```sh
+sudo apt update
+sudo apt build-dep -y kwin
+sudo apt install -y git ccache build-essential devscripts fakeroot quilt git-buildpackage pristine-tar
+origtargz
+gbp buildpackage -uc -us -jauto --git-ignore-branch --git-no-pristine-tar
+```
+
+Related Termux package pull request: https://github.com/lfdevs/termux-packages/pull/12
+
+### Weston
+
+- Repository: https://github.com/lfdevs/weston
+- Debian branch: `debian-unstable`
+- Ubuntu branch: `ubuntu/resolute`
+
+After checking out the appropriate branch in a Linux container for the corresponding distribution, use `gbp` to build the Debian package:
+
+```sh
+sudo apt update
+sudo apt build-dep -y weston
+sudo apt install -y git ccache build-essential devscripts fakeroot quilt git-buildpackage pristine-tar
+origtargz
+gbp buildpackage -uc -us -jauto --git-ignore-branch --git-no-pristine-tar
+```
+
+Related Termux package pull request: https://github.com/lfdevs/termux-packages/pull/14
+
+### Mesa
+
+- Repository: https://github.com/lfdevs/mesa-for-android-container
+- Branch: `dev/adreno-main`
+
+For build instructions, refer to that project’s developer documentation. This branch contains Freedreno and Turnip changes for Android containers; the generated archives are inputs when building the Debian 13 and Ubuntu 26.04 container images.
+
+Related Termux package pull request: https://github.com/termux/termux-packages/pull/30162
+
+## GitHub Actions
+
+The repository provides six workflows in [`.github/workflows/`](../.github/workflows/). Packages and container images target ARM64. The packages, APKs, checksums, and container images produced by the workflows are for releases and subsequent integration verification; they do not replace runtime tests of display, input, audio, and other behavior on a physical Android device.
+
+> [!NOTE]
+> The `tag` used by package-build workflows (referred to below as TAG) is passed directly to `git clone -b`. Workflows do not verify whether a TAG belongs to the selected distribution, nor do they automatically replace the default TAG in the input field when the distribution changes.
+>
+> **The TAG must correspond to the Linux distribution selected by `distribution`:**
+>
+> - For `Debian 13` (trixie), XWayland, KWin, and Weston must use TAGs created from the `debian-unstable` branch.
+> - For `Ubuntu 26.04` (resolute), they must use TAGs created from the `ubuntu/resolute` branch.
+> - A mismatched TAG can build a package for one distribution with the build dependencies of another, causing the build to fail or producing a package that cannot be used in the target image.
+> - The default TAGs displayed by the workflows are examples for convenience only. Before triggering a build, confirm the actual TAG to build in the corresponding source repository.
+
+### Build Anland APK
+
+Workflow file: [`build-anland-apk.yml`](../.github/workflows/build-anland-apk.yml)
+
+Builds the Android APK, computes a SHA-256 checksum, and saves the APK and `sha256sums.txt` as build artifacts retained for 90 days.
+
+Triggers:
+
+- Pull requests: runs automatically when the target branch is `termux` and `app/**` changes, building the GitHub-provided PR merge ref.
+- Manual: run with `workflow_dispatch`.
+
+Manual input:
+
+- `ref`: required Git reference to build; may be a branch, TAG, or commit. The default is `termux`.
+
+The build environment is fixed to JDK 21, Gradle 9.6.0, and Android NDK 29.0.14206865, and invokes `tools/build-app.sh`.
+
+### Build Docker Images
+
+Workflow file: [`build-images.yml`](../.github/workflows/build-images.yml)
+
+Combines Dockerfiles in this repository with the KWin or Weston, XWayland, and Mesa ARM64 build artifacts recorded in `images/packages.json`, then builds and pushes PRoot container images to GHCR. It also generates build provenance for image digests.
+
+This workflow is manual only. Its inputs are:
+
+- `distribution`: required Linux distribution; either `Debian 13` or `Ubuntu 26.04`. The default is `Ubuntu 26.04`.
+- `desktop`: required desktop environment; either `KDE Plasma` or `Weston`. The default is `KDE Plasma`.
+
+Distribution, Dockerfile, and image-TAG mappings:
+
+| Distribution | Codename | KDE Plasma Dockerfile / TAG | Weston Dockerfile / TAG |
+| --- | --- | --- | --- |
+| Debian 13 | `trixie` | `images/debian-plasma.Dockerfile` / `trixie-anland-plasma` | `images/debian-weston.Dockerfile` / `trixie-anland-weston` |
+| Ubuntu 26.04 | `resolute` | `images/ubuntu-plasma.Dockerfile` / `resolute-anland-plasma` | `images/ubuntu-weston.Dockerfile` / `resolute-anland-weston` |
+
+The final image name is `ghcr.io/<repository owner>/debian:<TAG>` or `ghcr.io/<repository owner>/ubuntu:<TAG>`. This workflow has no manual TAG input; the image TAG is generated automatically from the selected distribution and desktop environment.
+
+### Build XWayland Packages
+
+Workflow file: [`build-xwayland.yml`](../.github/workflows/build-xwayland.yml)
+
+Builds XWayland ARM64 Debian packages from a specified TAG in <https://github.com/lfdevs/xwayland>. It removes development and debug-symbol packages, then uploads the `.deb` files and `sha256sums.txt`, which are retained for 90 days.
+
+This workflow is manual only. Its inputs are:
+
+- `distribution`: required; either `Debian 13` or `Ubuntu 26.04`. The default is `Ubuntu 26.04`.
+- `tag`: required. The default, `anland-1.11-ubuntu-2_24.1.10-90`, is for Ubuntu 26.04. When selecting Debian 13, you must replace it with an XWayland Debian TAG.
+
+The workflow installs XWayland build dependencies in the selected distribution environment, builds with `gbp buildpackage`, and uses ccache to speed up subsequent runs.
+
+### Build KWin Packages
+
+Workflow file: [`build-kwin.yml`](../.github/workflows/build-kwin.yml)
+
+Builds KWin ARM64 Debian packages from a specified TAG in <https://github.com/lfdevs/kwin>. It removes development and debug-symbol packages, then uploads the `.deb` files and `sha256sums.txt`, which are retained for 90 days.
+
+This workflow is manual only. Its inputs are:
+
+- `distribution`: required; either `Debian 13` or `Ubuntu 26.04`. The default is `Ubuntu 26.04`.
+- `tag`: required. The default, `anland-5.8-4_6.6.4-0ubuntu92`, is for Ubuntu 26.04. When selecting Debian 13, you must replace it with a KWin Debian TAG.
+
+The workflow installs KWin build dependencies in the selected distribution environment, builds with `gbp buildpackage`, and uses ccache to speed up subsequent runs.
+
+### Build Weston Packages
+
+Workflow file: [`build-weston.yml`](../.github/workflows/build-weston.yml)
+
+Builds Weston ARM64 Debian packages from a specified TAG in <https://github.com/lfdevs/weston>. It removes development and debug-symbol packages, then uploads the `.deb` files and `sha256sums.txt`, which are retained for 90 days.
+
+This workflow is manual only. Its inputs are:
+
+- `distribution`: required; either `Debian 13` or `Ubuntu 26.04`. The default is `Debian 13`.
+- `tag`: required. The default, `anland-5.13-debian-14.0.2-91`, is for Debian 13. When selecting Ubuntu 26.04, you must replace it with a Weston Ubuntu TAG.
+
+The workflow installs Weston build dependencies in the selected distribution container, builds with `gbp buildpackage` using the `--git-no-pristine-tar` option, and uses ccache to speed up subsequent runs.
+
+### Build Wayland Protocols Packages
+
+> [!NOTE]
+> This workflow is outdated and applies only to Anland: Termux 1.11.
+
+Workflow file: [`build-wayland-protocols.yml`](../.github/workflows/build-wayland-protocols.yml)
+
+Builds Wayland Protocols ARM64 Debian packages from a specified TAG in <https://github.com/lfdevs/wayland-protocols>, then uploads the `.deb` files and `sha256sums.txt`, which are retained for 90 days.
+
+This workflow is manual only. Its inputs are:
+
+- `distribution`: required; currently only `Debian 13` is available and is also the default.
+- `tag`: required. The default, `anland-1.11-debian-1.44-90`, must be a TAG for Debian 13.
+
+The workflow installs build dependencies in a Debian trixie container and builds with `gbp buildpackage`.
