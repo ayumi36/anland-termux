@@ -21,18 +21,20 @@ In the [latest release notes](https://github.com/lfdevs/anland-termux/releases/l
 
 | Item | Filename |
 | :---: | --- |
-| Android Display App | `AnlandTermux-5.13.0.apk` |
+| Android Display App | `AnlandTermux-5.13.1.apk` |
 | Termux Daemon | `anland_5.11.0-1_aarch64.deb` |
 
-| | KWin | XWayland |
-| :---: | --- | --- |
-| Termux Native | `kwin-anland_6.7.2_aarch64.deb` | `xwayland_24.1.12-2_aarch64.deb` |
-| Ubuntu 26.04 LTS | `kwin_anland-5.8-4_6.6.4-0ubuntu92.zip` | `xwayland_24.1.10-91_arm64.deb` |
-| Debian 13 | `kwin_anland-5.8-debian-4_6.3.6-92.zip` | `xwayland_24.1.6-91_arm64.deb` |
+| | XWayland | KWin | Weston |
+| :---: | --- | --- | --- |
+| Termux Native | `xwayland_24.1.12-2_aarch64.deb` | `kwin-anland_6.7.2_aarch64.deb` | `weston_14.0.2-3_aarch64.deb` |
+| Ubuntu 26.04 | `xwayland_24.1.10-91_arm64.deb` | `kwin_anland-5.8-4_6.6.4-0ubuntu92.zip` | `weston_anland-5.13-ubuntu-14.0.2-92.zip` |
+| Debian 13 | `xwayland_24.1.6-91_arm64.deb` | `kwin_anland-5.8-debian-4_6.3.6-92.zip` | `weston_anland-5.13-debian-14.0.2-92.zip` |
 
-The Android Display App and Termux Daemon are required. Choose the KWin and XWayland versions that match your runtime environment.
+The Android Display App and Termux Daemon are required. Choose the XWayland, Weston, and KWin versions that match your runtime environment.
 
-For example, to run Anland: Termux in a Debian 13 PRoot container, download these four files: `AnlandTermux-5.13.0.apk`, `anland_5.11.0-1_aarch64.deb`, `kwin_anland-5.8-debian-4_6.3.6-92.zip`, and `xwayland_24.1.6-91_arm64.deb`.
+For example, to run Anland: Termux with KDE Plasma in a Debian 13 PRoot container, download these four files: `AnlandTermux-5.13.1.apk`, `anland_5.11.0-1_aarch64.deb`, `xwayland_24.1.6-91_arm64.deb`, and `kwin_anland-5.8-debian-4_6.3.6-92.zip`.
+
+Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, download these four files: `AnlandTermux-5.13.1.apk`, `anland_5.11.0-1_aarch64.deb`, `xwayland_24.1.10-91_arm64.deb`, and `weston_anland-5.13-ubuntu-14.0.2-92.zip`.
 
 ## Installation
 
@@ -51,32 +53,40 @@ For example, to run Anland: Termux in a Debian 13 PRoot container, download thes
 >
 > ```sh
 > pkg install proot-distro
-> # For Debian 13:
+> # Debian 13 with KDE Plasma:
 > proot-distro install ghcr.io/lfdevs/debian:trixie-anland-plasma --name debian-anland
-> # For Ubuntu 26.04 LTS:
+> # Ubuntu 26.04 with KDE Plasma:
 > proot-distro install ghcr.io/lfdevs/ubuntu:resolute-anland-plasma --name ubuntu-anland
+> # Debian 13 with Weston:
+> proot-distro install ghcr.io/lfdevs/debian:trixie-anland-weston --name debian-anland-weston
+> # Ubuntu 26.04 with Weston:
+> proot-distro install ghcr.io/lfdevs/ubuntu:resolute-anland-weston --name ubuntu-anland-weston
 > ```
 >
-> To use it, run the following commands. This starts the KDE Plasma desktop. Then switch to the “Anland Termux” app on Android.
+> To use it, run the following commands. This starts KDE Plasma or Weston. Then switch to the “Anland Termux” app on Android. The `ANLAND_WESTON_SCALE` environment variable in the commands sets Weston’s scaling factor; set it to an integer that suits your needs.
 >
 > ```sh
 > killall anland > /dev/null 2>&1
 > anland > /dev/null 2>&1 &
-> # For Debian 13:
+> # Debian 13 with KDE Plasma:
 > proot-distro login debian-anland --shared-tmp -- bash -c "startplasma-anland"
-> # For Ubuntu 26.04 LTS:
+> # Ubuntu 26.04 with KDE Plasma:
 > proot-distro login ubuntu-anland --shared-tmp -- bash -c "startplasma-anland"
+> # Debian 13 with Weston:
+> proot-distro login debian-anland-weston --shared-tmp -- bash -c "ANLAND_WESTON_SCALE=2 startweston-anland"
+> # Ubuntu 26.04 with Weston:
+> proot-distro login ubuntu-anland-weston --shared-tmp -- bash -c "ANLAND_WESTON_SCALE=2 startweston-anland"
 > ```
 
-3. After installing the KDE Plasma desktop in your runtime environment, install KWin and XWayland through its package manager. **If a file is a `.zip` archive, extract it first to obtain the actual installation packages.**
+3. After installing KDE Plasma or Weston in your runtime environment, install this project’s XWayland through its package manager, then install this project’s KWin or Weston as needed. **If a file is a `.zip` archive, extract it first to obtain the actual installation packages.**
 
-   For example, in Termux Native:
+   For example, to install XWayland and KWin in Termux Native:
 
    ```sh
    pkg reinstall ./kwin-anland_6.7.2_aarch64.deb ./xwayland_24.1.12-2_aarch64.deb
    ```
 
-   Or in a Debian 13 container:
+   Or, to install XWayland and KWin in a Debian 13 container:
 
    ```sh
    sudo apt reinstall ./xwayland_24.1.6-91_arm64.deb
@@ -85,24 +95,33 @@ For example, to run Anland: Termux in a Debian 13 PRoot container, download thes
    rm -rf kwin-debs-install/
    ```
 
+   Or, to install XWayland and Weston in an Ubuntu 26.04 container:
+
+   ```sh
+   sudo apt reinstall ./xwayland_24.1.10-91_arm64.deb
+   unzip weston_anland-5.13-ubuntu-14.0.2-92.zip -d weston-debs-install/
+   sudo apt reinstall weston-debs-install/*.deb
+   rm -rf weston-debs-install/
+   ```
+
 4. Install the Freedreno (KGSL) driver in your runtime environment.
 
-   For Termux Native, follow the instructions on this page: https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709
+   For Termux Native, follow the instructions on this page: https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709. If you use Weston, use this version instead: https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709-weston
 
    For Linux containers, follow the instructions on this page: https://github.com/lfdevs/mesa-for-android-container/releases/latest
 
-5. Hold the KWin, XWayland, and Mesa packages to prevent them from being affected by updates.
+5. Hold the XWayland, KWin, Weston, and Mesa packages to prevent them from being affected by updates.
 
    For example, in Termux Native:
 
    ```sh
-   apt-mark hold xwayland mesa mesa-vulkan-icd-freedreno
+   apt-mark hold xwayland weston mesa mesa-vulkan-icd-freedreno
    ```
 
-   Or in Debian 13 or Ubuntu 26.04 LTS containers:
+   Or in Debian 13 or Ubuntu 26.04 containers:
 
    ```sh
-   sudo apt-mark hold xwayland kwin-common kwin-data kwin-wayland libkwin6 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers
+   sudo apt-mark hold xwayland kwin-common kwin-data kwin-wayland libkwin6 weston libweston-14-0 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers
    ```
 
 ## Usage
@@ -122,10 +141,12 @@ For example, to run Anland: Termux in a Debian 13 PRoot container, download thes
    proot-distro login debian --shared-tmp
    ```
 
-3. After entering the runtime environment, download and run this helper script: [startplasma-anland.sh](../scripts/startplasma-anland.sh)
+3. After entering the runtime environment, download and run the following helper scripts.
 
 > [!TIP]
-> To ensure that audio services work correctly, make sure PipeWire is installed before running the script. For example, install the `pipewire` package in Termux or the `pipewire-audio` package in Debian/Ubuntu.
+> To ensure that audio services work correctly, make sure PipeWire is installed before running either script. For example, install the `pipewire` package in Termux or the `pipewire-audio` package in Debian/Ubuntu.
+
+   KDE Plasma: [startplasma-anland.sh](../scripts/startplasma-anland.sh)
 
    ```sh
    curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startplasma-anland.sh
@@ -133,10 +154,18 @@ For example, to run Anland: Termux in a Debian 13 PRoot container, download thes
    ./startplasma-anland.sh
    ```
 
+   Weston: [startweston-anland.sh](../scripts/startweston-anland.sh)
+
+   ```sh
+   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startweston-anland.sh
+   chmod +x ./startweston-anland.sh
+   ./startweston-anland.sh
+   ```
+
 4. Switch to the “Anland Termux” app on Android and enjoy your Wayland desktop.
 
 > [!TIP]
-> If the helper script cannot enter the desktop or the desktop session is unstable, you can manually start the desktop session with the following commands for your runtime environment. **Pay close attention to the comments in the commands and choose the appropriate options.** These commands currently cannot start the PipeWire audio service. And you must also disable microphone and camera forwarding in the “Anland Termux” app’s settings.
+> If the helper script cannot enter the KDE Plasma desktop or the desktop session is unstable, you can manually start the desktop session with the following commands for your runtime environment. **Pay close attention to the comments in the commands and choose the appropriate options.** These commands currently cannot start the PipeWire audio service; you must also **disable microphone and camera forwarding** in the “Anland Termux” app’s settings.
 >
 > * In a PRoot / Chroot / LXC container:
 >

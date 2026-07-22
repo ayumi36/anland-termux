@@ -21,18 +21,20 @@ echo $TERMUX_APP__APK_RELEASE
 
 | Item | Filename |
 | :---: | --- |
-| Android Display App | `AnlandTermux-5.13.0.apk` |
+| Android Display App | `AnlandTermux-5.13.1.apk` |
 | Termux Daemon | `anland_5.11.0-1_aarch64.deb` |
 
-| | KWin | XWayland |
-| :---: | --- | --- |
-| Termux Native | `kwin-anland_6.7.2_aarch64.deb` | `xwayland_24.1.12-2_aarch64.deb` |
-| Ubuntu 26.04 LTS | `kwin_anland-5.8-4_6.6.4-0ubuntu92.zip` | `xwayland_24.1.10-91_arm64.deb` |
-| Debian 13 | `kwin_anland-5.8-debian-4_6.3.6-92.zip` | `xwayland_24.1.6-91_arm64.deb` |
+| | XWayland | KWin | Weston |
+| :---: | --- | --- | --- |
+| Termux Native | `xwayland_24.1.12-2_aarch64.deb` | `kwin-anland_6.7.2_aarch64.deb` | `weston_14.0.2-3_aarch64.deb` |
+| Ubuntu 26.04 | `xwayland_24.1.10-91_arm64.deb` | `kwin_anland-5.8-4_6.6.4-0ubuntu92.zip` | `weston_anland-5.13-ubuntu-14.0.2-92.zip` |
+| Debian 13 | `xwayland_24.1.6-91_arm64.deb` | `kwin_anland-5.8-debian-4_6.3.6-92.zip` | `weston_anland-5.13-debian-14.0.2-92.zip` |
 
-“Android Display App”和“Termux Daemon”是必需的。“KWin”和“XWayland”的版本请根据你的实际运行环境来进行选择。
+“Android Display App”和“Termux Daemon”是必需的。“XWayland”、“Weston”和“KWin”和的版本请根据你的实际运行环境来进行选择。
 
-例如，在 Debian 13 的 PRoot 容器中运行 Anland: Termux，需要下载 `AnlandTermux-5.13.0.apk`、`anland_5.11.0-1_aarch64.deb`、`kwin_anland-5.8-debian-4_6.3.6-92.zip` 和 `xwayland_24.1.6-91_arm64.deb` 四个文件。
+例如，在 Debian 13 的 PRoot 容器中运行 Anland: Termux，并使用 KDE Plasma，需要下载 `AnlandTermux-5.13.1.apk`、`anland_5.11.0-1_aarch64.deb`、`xwayland_24.1.6-91_arm64.deb` 和 `kwin_anland-5.8-debian-4_6.3.6-92.zip` 四个文件。
+
+又如，在 Ubuntu 26.04 的 Chroot 容器中运行 Anland: Termux，并使用 Weston，需要下载 `AnlandTermux-5.13.1.apk`、`anland_5.11.0-1_aarch64.deb`、`xwayland_24.1.10-91_arm64.deb` 和 `weston_anland-5.13-ubuntu-14.0.2-92.zip` 四个文件。
 
 ## 安装
 
@@ -51,32 +53,40 @@ echo $TERMUX_APP__APK_RELEASE
 >
 > ```sh
 > pkg install proot-distro
-> # For Debian 13:
+> # 使用 Debian 13 的 KDE Plasma：
 > proot-distro install ghcr.io/lfdevs/debian:trixie-anland-plasma --name debian-anland
-> # For Ubuntu 26.04 LTS:
+> # 使用 Ubuntu 26.04 的 KDE Plasma：
 > proot-distro install ghcr.io/lfdevs/ubuntu:resolute-anland-plasma --name ubuntu-anland
+> # 使用 Debian 13 的 Weston：
+> proot-distro install ghcr.io/lfdevs/debian:trixie-anland-weston --name debian-anland-weston
+> # 使用 Ubuntu 26.04 的 Weston：
+> proot-distro install ghcr.io/lfdevs/ubuntu:resolute-anland-weston --name ubuntu-anland-weston
 > ```
 >
-> 使用方法如下。它将会启动 KDE Plasma 桌面，然后请切换到 Android 的“Anland Termux”应用。
+> 使用方法如下。它将会启动 KDE Plasma 或 Weston，然后请切换到 Android 的“Anland Termux”应用。命令中的环境变量 `ANLAND_WESTON_SCALE` 为 Weston 的缩放倍数，请根据实际需要设置为整数。
 >
 > ```sh
 > killall anland > /dev/null 2>&1
 > anland > /dev/null 2>&1 &
-> # For Debian 13:
+> # 使用 Debian 13 的 KDE Plasma：
 > proot-distro login debian-anland --shared-tmp -- bash -c "startplasma-anland"
-> # For Ubuntu 26.04 LTS:
+> # 使用 Ubuntu 26.04 的 KDE Plasma：
 > proot-distro login ubuntu-anland --shared-tmp -- bash -c "startplasma-anland"
+> # 使用 Debian 13 的 Weston：
+> proot-distro login debian-anland-weston --shared-tmp -- bash -c "ANLAND_WESTON_SCALE=2 startweston-anland"
+> # 使用 Ubuntu 26.04 的 Weston：
+> proot-distro login ubuntu-anland-weston --shared-tmp -- bash -c "ANLAND_WESTON_SCALE=2 startweston-anland"
 > ```
 
-3. 在实际运行环境中完成 KDE Plasma 桌面的安装后，使用软件包管理器安装 KWin 和 XWayland。**如果是 `.zip` 格式的压缩包，则需要先解压才能得到实际的安装包。**
+3. 在实际运行环境中完成 KDE Plasma 或 Weston 的安装后，使用软件包管理器安装本项目的 XWayland，然后根据你的需要安装本项目的 KWin 或 Weston。**如果是 `.zip` 格式的压缩包，则需要先解压才能得到实际的安装包。**
 
-   比如在 Termux Native 中：
+   比如，在 Termux Native 中安装 XWayland 和 KWin：
 
    ```sh
    pkg reinstall ./kwin-anland_6.7.2_aarch64.deb ./xwayland_24.1.12-2_aarch64.deb
    ```
 
-   又如在 Debian 13 容器中：
+   又如，在 Debian 13 容器中安装 XWayland 和 KWin：
 
    ```sh
    sudo apt reinstall ./xwayland_24.1.6-91_arm64.deb
@@ -85,24 +95,33 @@ echo $TERMUX_APP__APK_RELEASE
    rm -rf kwin-debs-install/
    ```
 
+   再如，在 Ubuntu 26.04 容器中安装 XWayland 和 Weston：
+
+   ```sh
+   sudo apt reinstall ./xwayland_24.1.10-91_arm64.deb
+   unzip weston_anland-5.13-ubuntu-14.0.2-92.zip -d weston-debs-install/
+   sudo apt reinstall weston-debs-install/*.deb
+   rm -rf weston-debs-install/
+   ```
+
 4. 在实际运行环境中安装 Freedreno (KGSL) 驱动。
 
-   对于 Termux Native，请按照该页面的说明进行安装：https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709
+   对于 Termux Native，请按照该页面的说明进行安装：https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709 。如果使用 Weston，请使用该版本：https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709-weston 。
 
    对于 Linux 容器，请按照该页面的说明进行安装：https://github.com/lfdevs/mesa-for-android-container/releases/latest
   
-5. 锁定 KWin、XWayland 和 Mesa 软件包的版本，避免其受到更新的影响。
+5. 锁定 XWayland、KWin、Weston 和 Mesa 软件包的版本，避免其受到更新的影响。
 
    比如在 Termux Native 中：
 
    ```sh
-   apt-mark hold xwayland mesa mesa-vulkan-icd-freedreno
+   apt-mark hold xwayland weston mesa mesa-vulkan-icd-freedreno
    ```
 
-   又如在 Debian 13 或 Ubuntu 26.04 LTS 容器中：
+   又如在 Debian 13 或 Ubuntu 26.04 容器中：
 
    ```sh
-   sudo apt-mark hold xwayland kwin-common kwin-data kwin-wayland libkwin6 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers
+   sudo apt-mark hold xwayland kwin-common kwin-data kwin-wayland libkwin6 weston libweston-14-0 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers
    ```
 
 ## 使用
@@ -122,10 +141,12 @@ echo $TERMUX_APP__APK_RELEASE
    proot-distro login debian --shared-tmp
    ```
 
-3. 进入实际运行环境后，下载并运行该一键脚本：[startplasma-anland.sh](../scripts/startplasma-anland.sh)
+3. 进入实际运行环境后，下载并运行以下一键脚本。
 
 > [!TIP]
-> 为了使音频服务正常运行，执行该脚本前请先确认 PipeWire 已安装。如 Termux 中的 `pipewire` 包，Debian/Ubuntu 中的 `pipewire-audio` 包。
+> 为了使音频服务正常运行，执行脚本前请先确认 PipeWire 已安装。如 Termux 中的 `pipewire` 包，Debian/Ubuntu 中的 `pipewire-audio` 包。
+
+   KDE Plasma：[startplasma-anland.sh](../scripts/startplasma-anland.sh)
 
    ```sh
    curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startplasma-anland.sh
@@ -133,10 +154,18 @@ echo $TERMUX_APP__APK_RELEASE
    ./startplasma-anland.sh
    ```
 
+   Weston：[startweston-anland.sh](../scripts/startweston-anland.sh)
+
+   ```sh
+   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startweston-anland.sh
+   chmod +x ./startweston-anland.sh
+   ./startweston-anland.sh
+   ```
+
 4. 切换到 Android 的“Anland Termux”应用，开始享受 Wayland 桌面。
 
 > [!TIP]
-> 如果使用一键脚本无法进入桌面或者桌面会话容易崩溃的话，则可以根据实际运行环境使用以下的命令手动启动桌面会话。**请留意命令中的注释，根据实际情况进行选择。** 目前以下命令的限制是无法启动 PipeWire 音频服务，还需要在“Anland Termux”应用的设置里关闭麦克风和摄像头的转发。
+> 如果使用一键脚本无法进入 KDE Plasma 桌面或者桌面会话容易崩溃的话，则可以根据实际运行环境使用以下的命令手动启动桌面会话。**请留意命令中的注释，根据实际情况进行选择。** 目前以下命令的限制是无法启动 PipeWire 音频服务，还需要在“Anland Termux”应用的设置里**关闭麦克风和摄像头的转发** 。
 >
 > * 在 PRoot / Chroot / LXC 容器内：
 >
