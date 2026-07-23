@@ -46,6 +46,26 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
+      - name: Add debug suffix to PR version
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_VERSION="$(sed -nE \
+            's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*$/\1/p' \
+            app/build.gradle)"
+          if [[ -z "$CURRENT_VERSION" ]]; then
+            echo "Could not read versionName from app/build.gradle" >&2
+            exit 1
+          fi
+
+          SHORT_SHA="$(git rev-parse --short=7 HEAD)"
+          DEBUG_VERSION="${CURRENT_VERSION}-debug-${SHORT_SHA}"
+          sed -i -E \
+            "s/^([[:space:]]*versionName[[:space:]]*=[[:space:]]*)\"[^\"]+\"/\\1\"${DEBUG_VERSION}\"/" \
+            app/build.gradle
+          echo "PR APK versionName: $DEBUG_VERSION"
+
       - name: Select Android NDK
         shell: bash
         run: |
