@@ -8,7 +8,7 @@ This guide walks you through downloading, installing, and using [Anland: Termux]
 
 ## Prerequisites
 
-Before installing Anland: Termux, check that your installed Termux app comes from the [official GitHub releases](https://github.com/termux/termux-app/releases) **(not F-Droid or Google Play)**. This project supports only the Termux app from the official GitHub releases. To migrate Termux to the GitHub version, refer to the official backup and restore guide: https://wiki.termux.com/wiki/Backing_up_Termux
+Before installing Anland: Termux, check that your installed Termux app comes from the [official GitHub releases](https://github.com/termux/termux-app/releases) **(not F-Droid or Google Play)**. This project supports only the Termux app from the official GitHub releases. To migrate Termux to the GitHub version, refer to the official backup and restore guide: <https://wiki.termux.com/wiki/Backing_up_Termux>
 
 ```sh
 # Run this command in Termux; it should output 'GITHUB'
@@ -104,11 +104,14 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
    rm -rf weston-debs-install/
    ```
 
+> [!NOTE]
+> When using KDE Plasma Wayland in Termux Native, you must also install the modified LayerShellQt package: <https://github.com/lfdevs/termux-packages/releases/tag/layer-shell-qt_6.7.3-1>
+
 4. Install the Freedreno (KGSL) driver in your runtime environment.
 
-   For Termux Native, follow the instructions on this page: https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709. If you use Weston, use this version instead: https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709-weston
+   For Termux Native, follow the instructions on this page: <https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709>. If you use Weston, use this version instead: <https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709-weston>.
 
-   For Linux containers, follow the instructions on this page: https://github.com/lfdevs/mesa-for-android-container/releases/latest
+   For Linux containers, follow the instructions on this page: <https://github.com/lfdevs/mesa-for-android-container/releases/latest>
 
 5. Hold the XWayland, KWin, Weston, and Mesa packages to prevent them from being affected by updates.
 

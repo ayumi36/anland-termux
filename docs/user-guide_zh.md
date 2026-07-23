@@ -8,7 +8,7 @@
 
 ## 前提
 
-在安装 Anland: Termux 前，请先检查你现在安装的 Termux App 是否来自 [GitHub 的官方 Releases](https://github.com/termux/termux-app/releases)**（而非 F-Droid 或 Google Play）**。本项目仅支持与来自 GitHub 官方 Releases 的 Termux App 一同工作。如果你想将 Termux 迁移到 GitHub 版本，可以参考官方的备份与恢复指南：https://wiki.termux.com/wiki/Backing_up_Termux
+在安装 Anland: Termux 前，请先检查你现在安装的 Termux App 是否来自 [GitHub 的官方 Releases](https://github.com/termux/termux-app/releases)**（而非 F-Droid 或 Google Play）**。本项目仅支持与来自 GitHub 官方 Releases 的 Termux App 一同工作。如果你想将 Termux 迁移到 GitHub 版本，可以参考官方的备份与恢复指南：<https://wiki.termux.com/wiki/Backing_up_Termux>
 
 ```sh
 # 在 Termux 运行这条命令，输出应为 'GITHUB'
@@ -104,11 +104,14 @@ echo $TERMUX_APP__APK_RELEASE
    rm -rf weston-debs-install/
    ```
 
+> [!NOTE]
+> 在 Termux Native 中使用 KDE Plasma Wayland，还需额外安装修改版的 LayerShellQt：<https://github.com/lfdevs/termux-packages/releases/tag/layer-shell-qt_6.7.3-1>
+
 4. 在实际运行环境中安装 Freedreno (KGSL) 驱动。
 
-   对于 Termux Native，请按照该页面的说明进行安装：https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709 。如果使用 Weston，请使用该版本：https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709-weston 。
+   对于 Termux Native，请按照该页面的说明进行安装：<https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709>。如果使用 Weston，请使用该版本：<https://github.com/lfdevs/termux-packages/releases/tag/freedreno-26.2.0-devel-20260709-weston>。
 
-   对于 Linux 容器，请按照该页面的说明进行安装：https://github.com/lfdevs/mesa-for-android-container/releases/latest
+   对于 Linux 容器，请按照该页面的说明进行安装：<https://github.com/lfdevs/mesa-for-android-container/releases/latest>
   
 5. 锁定 XWayland、KWin、Weston 和 Mesa 软件包的版本，避免其受到更新的影响。
 
