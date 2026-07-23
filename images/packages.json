@@ -4,12 +4,12 @@
     "distributions": {
       "debian": {
         "trixie": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.1/kwin_anland-5.8-debian-4_6.3.6-92.zip"
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/kwin_anland-5.13-debian-4_6.3.6-93.zip"
         }
       },
       "ubuntu": {
         "resolute": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.1/kwin_anland-5.8-4_6.6.4-0ubuntu92.zip"
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/kwin_anland-5.13-4_6.6.4-0ubuntu93.zip"
         }
       }
     }
@@ -19,12 +19,12 @@
     "distributions": {
       "debian": {
         "trixie": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.1/xwayland_24.1.6-91_arm64.deb"
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/xwayland_24.1.6-91_arm64.deb"
         }
       },
       "ubuntu": {
         "resolute": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.1/xwayland_24.1.10-91_arm64.deb"
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/xwayland_24.1.10-91_arm64.deb"
         }
       }
     }
@@ -34,12 +34,12 @@
     "distributions": {
       "debian": {
         "trixie": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.1/weston_anland-5.13-debian-14.0.2-92.zip"
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/weston_anland-5.13-debian-14.0.2-92.zip"
         }
       },
       "ubuntu": {
         "resolute": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.1/weston_anland-5.13-ubuntu-14.0.2-92.zip"
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/weston_anland-5.13-ubuntu-14.0.2-92.zip"
         }
       }
     }
