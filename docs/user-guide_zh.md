@@ -106,6 +106,8 @@ echo $TERMUX_APP__APK_RELEASE
 
 > [!NOTE]
 > 在 Termux Native 中使用 KDE Plasma Wayland，还需额外安装修改版的 LayerShellQt：<https://github.com/lfdevs/termux-packages/releases/tag/layer-shell-qt_6.7.3-1>
+>
+> 建议同时安装 [Termux API](https://github.com/termux/termux-api)，它将提高在 Termux Native 中使用 KDE Plasma Wayland 的稳定性。
 
 4. 在实际运行环境中安装 Freedreno (KGSL) 驱动。
 
@@ -126,6 +128,25 @@ echo $TERMUX_APP__APK_RELEASE
    ```sh
    sudo apt-mark hold xwayland kwin-common kwin-data kwin-wayland libkwin6 weston libweston-14-0 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers
    ```
+
+> [!TIP]
+> 上述方法会在每次手动安装/更新相关的软件包时自动解除版本锁定。如需“一劳永逸”，可以添加软件包管理器的配置文件。
+>
+> 比如在 Termux Native 中，添加文件 `$PREFIX/etc/apt/preferences.d/hold-anland-package`：
+>
+> ```text
+> Package: xwayland mesa mesa-vulkan-icd-freedreno weston layer-shell-qt
+> Pin: release *
+> Pin-Priority: -1
+> ```
+>
+> 又如在 Debian 13 或 Ubuntu 26.04 容器中，添加文件 `/etc/apt/preferences.d/hold-anland-package`：
+>
+> ```text
+> Package: xwayland kwin-common kwin-data kwin-wayland libkwin6 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers weston libweston-*
+> Pin: release *
+> Pin-Priority: -1
+> ```
 
 ## 使用
 

@@ -106,6 +106,8 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
 
 > [!NOTE]
 > When using KDE Plasma Wayland in Termux Native, you must also install the modified LayerShellQt package: <https://github.com/lfdevs/termux-packages/releases/tag/layer-shell-qt_6.7.3-1>
+>
+> Installing [Termux:API](https://github.com/termux/termux-api) is also recommended, as it improves the stability of KDE Plasma Wayland in Termux Native.
 
 4. Install the Freedreno (KGSL) driver in your runtime environment.
 
@@ -126,6 +128,25 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
    ```sh
    sudo apt-mark hold xwayland kwin-common kwin-data kwin-wayland libkwin6 weston libweston-14-0 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers
    ```
+
+> [!TIP]
+> The method above automatically removes the version lock whenever you manually install or update a related package. To make it permanent, add a package-manager configuration file.
+>
+> For example, in Termux Native, create `$PREFIX/etc/apt/preferences.d/hold-anland-package`:
+>
+> ```text
+> Package: xwayland mesa mesa-vulkan-icd-freedreno weston layer-shell-qt
+> Pin: release *
+> Pin-Priority: -1
+> ```
+>
+> Or, in a Debian 13 or Ubuntu 26.04 container, create `/etc/apt/preferences.d/hold-anland-package`:
+>
+> ```text
+> Package: xwayland kwin-common kwin-data kwin-wayland libkwin6 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers weston libweston-*
+> Pin: release *
+> Pin-Priority: -1
+> ```
 
 ## Usage
 
