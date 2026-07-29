@@ -74,6 +74,9 @@ public class MainActivity extends Activity
     // Persistent "tap to open Settings" notification, toggleable in Settings > General.
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
     private static final String KEY_SCREEN_ORIENTATION = "screen_orientation";
+    private static final String KEY_POINTER_CAPTURE = "pointer_capture";
+    private static final String KEY_TRANSFORM_CAPTURED_POINTER = "transform_captured_pointer";
+    private static final String KEY_CAPTURED_POINTER_SPEED_FACTOR = "captured_pointer_speed_factor";
     // System soft-keyboard bridge: hidden input, text forwarding and toggle.
     private SystemIME systemIme;
     private int mImeBottom = 0;   // last IME bottom inset
@@ -81,6 +84,13 @@ public class MainActivity extends Activity
     private ExtraKeysBar extraKeysBar;
     private FrameLayout mRoot;    // content root, host of the extra-keys bar
     private float mDensity = 1f;
+    private boolean mPointerCaptureEnabled = false;
+    private String mCapturedPointerTransform = "no";
+    private float mCapturedPointerSpeedFactor = 1f;
+    private float mPointerX = 0f;
+    private float mPointerY = 0f;
+    private boolean mPointerPositionKnown = false;
+    private final float[] mTransformedPointerDelta = new float[2];
     // Layout JSON the current bar was built from; used to detect edits on resume.
     private String mAppliedLayoutJson = "";
 
@@ -167,6 +177,9 @@ public class MainActivity extends Activity
         getWindow().setDecorFitsSystemWindows(false);
 
         surfaceView = new SurfaceView(this);
+        surfaceView.setFocusableInTouchMode(true);
+        surfaceView.setOnCapturedPointerListener((v, event) ->
+            handleCapturedPointerEvent(event));
         systemIme = new SystemIME(this, this);
 
         FrameLayout root = new FrameLayout(this);
@@ -246,6 +259,7 @@ public class MainActivity extends Activity
         isTouchpadMode = prefs.getBoolean(KEY_TOUCHPAD_MODE, false);
         virtualTouchpad = new VirtualTouchpad(this);
         virtualTouchpad.setAccelStrength(prefs.getFloat(KEY_MOUSE_ACCEL, 1.0f));
+        reloadPointerCapturePreferences();
     }
 
     private static final String NOTIFICATION_CHANNEL = "anland_channel";
@@ -401,6 +415,7 @@ public class MainActivity extends Activity
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         isTouchpadMode = prefs.getBoolean(KEY_TOUCHPAD_MODE, false);
         virtualTouchpad.setAccelStrength(prefs.getFloat(KEY_MOUSE_ACCEL, 1.0f));
+        reloadPointerCapturePreferences();
     }
 
     private void applyScreenOrientation() {
@@ -432,6 +447,8 @@ public class MainActivity extends Activity
     @Override
     protected void onPause() {
         super.onPause();
+        if (surfaceView.hasPointerCapture())
+            surfaceView.releasePointerCapture();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm != null) nm.cancel(NOTIFICATION_ID);
         DisplayManager dm = getSystemService(DisplayManager.class);
@@ -703,6 +720,11 @@ public class MainActivity extends Activity
     // ================================================================
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && !surfaceView.isFocused())
+            surfaceView.requestFocus();
+        if (event.getActionMasked() == MotionEvent.ACTION_UP && mPointerCaptureEnabled)
+            surfaceView.requestPointerCapture();
+
         // ===== 触摸板模式优先处理（仅针对非鼠标触摸事件） =====
         if (isTouchpadMode && !isMouseEvent(event)) {
             return virtualTouchpad.onTouch(event);
@@ -735,6 +757,9 @@ public class MainActivity extends Activity
                 Native.nativeSendMouseMotion(event.getX()*scaleX, event.getY()*scaleY,
                                       event.getAxisValue(MotionEvent.AXIS_RELATIVE_X),
                                       event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y));
+                mPointerX = event.getX() * scaleX;
+                mPointerY = event.getY() * scaleY;
+                mPointerPositionKnown = true;
                 return true;
             }
             if (action == MotionEvent.ACTION_SCROLL) {
@@ -790,7 +815,9 @@ public class MainActivity extends Activity
         if (event.getRepeatCount() > 0)
             return true;
 
-        return forwardKeyToLinux(event);
+        boolean handled = forwardKeyToLinux(event);
+        releasePointerCaptureOnEscape(event);
+        return handled;
     }
 
     private boolean forwardKeyToLinux(KeyEvent event) {
@@ -832,7 +859,15 @@ public class MainActivity extends Activity
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         forwardKeyToLinux(event);
+        releasePointerCaptureOnEscape(event);
         return true;
+    }
+
+    private void releasePointerCaptureOnEscape(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_UP
+                && event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE
+                && event.hasNoModifiers() && surfaceView.hasPointerCapture())
+            surfaceView.releasePointerCapture();
     }
 
     private static final int CLASSIFICATION_TWO_FINGER_SWIPE = 3;
@@ -875,7 +910,120 @@ public class MainActivity extends Activity
             dx = (event.getX() - event.getHistoricalX(0, last))*scaleX;
             dy = (event.getY() - event.getHistoricalY(0, last))*scaleY;
         }
-        Native.nativeSendMouseMotion(event.getX() * scaleX, event.getY() * scaleY, dx, dy);
+        mPointerX = event.getX() * scaleX;
+        mPointerY = event.getY() * scaleY;
+        mPointerPositionKnown = true;
+        Native.nativeSendMouseMotion(mPointerX, mPointerY, dx, dy);
+
+        updateMouseButtons(event);
+        return true;
+    }
+
+    private void reloadPointerCapturePreferences() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        mPointerCaptureEnabled = prefs.getBoolean(KEY_POINTER_CAPTURE, false);
+        mCapturedPointerTransform = prefs.getString(KEY_TRANSFORM_CAPTURED_POINTER, "no");
+        if (mCapturedPointerTransform == null)
+            mCapturedPointerTransform = "no";
+        int speedPercent = prefs.getInt(KEY_CAPTURED_POINTER_SPEED_FACTOR, 100);
+        mCapturedPointerSpeedFactor = Math.max(1, Math.min(300, speedPercent)) / 100f;
+
+        if (!mPointerCaptureEnabled && surfaceView.hasPointerCapture())
+            surfaceView.releasePointerCapture();
+    }
+
+    private boolean handleCapturedPointerEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_SCROLL) {
+            float vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
+            float hScroll = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
+            if (vScroll != 0)
+                Native.nativeSendMouseScroll(0, -vScroll * 10);
+            if (hScroll != 0)
+                Native.nativeSendMouseScroll(1, hScroll * 10);
+        } else if (action == MotionEvent.ACTION_MOVE && event.getPointerCount() == 1) {
+            InputDevice device = event.getDevice();
+            boolean hasRelativeAxes = device != null
+                && device.getMotionRange(MotionEvent.AXIS_RELATIVE_X) != null;
+            boolean isRelativeMouse = (event.getSource() & InputDevice.SOURCE_MOUSE_RELATIVE)
+                == InputDevice.SOURCE_MOUSE_RELATIVE;
+
+            if (hasRelativeAxes || isRelativeMouse) {
+                float dx = hasRelativeAxes
+                    ? event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) : event.getX();
+                float dy = hasRelativeAxes
+                    ? event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y) : event.getY();
+                transformCapturedPointerDelta(dx, dy, event.getSource());
+
+                float scaleX = (customScreenWidth > 0 && viewWidth > 0)
+                    ? (float) customScreenWidth / viewWidth : 1f;
+                float scaleY = (customScreenHeight > 0 && viewHeight > 0)
+                    ? (float) customScreenHeight / viewHeight : 1f;
+                dx = mTransformedPointerDelta[0]
+                    * mCapturedPointerSpeedFactor * mDensity * scaleX;
+                dy = mTransformedPointerDelta[1]
+                    * mCapturedPointerSpeedFactor * mDensity * scaleY;
+
+                int outputWidth = customScreenWidth > 0 ? customScreenWidth : viewWidth;
+                int outputHeight = customScreenHeight > 0 ? customScreenHeight : viewHeight;
+                if (!mPointerPositionKnown) {
+                    mPointerX = Math.max(0, outputWidth) / 2f;
+                    mPointerY = Math.max(0, outputHeight) / 2f;
+                    mPointerPositionKnown = true;
+                }
+                mPointerX = clamp(mPointerX + dx, 0f, Math.max(0, outputWidth));
+                mPointerY = clamp(mPointerY + dy, 0f, Math.max(0, outputHeight));
+                Native.nativeSendMouseMotion(mPointerX, mPointerY, dx, dy);
+            }
+        }
+
+        updateMouseButtons(event);
+        return true;
+    }
+
+    private void transformCapturedPointerDelta(float x, float y, int source) {
+        String transform = mCapturedPointerTransform;
+        if ("at".equals(transform)) {
+            if ((source & InputDevice.SOURCE_TOUCHPAD) == InputDevice.SOURCE_TOUCHPAD) {
+                Display display = getDisplay();
+                int rotation = display != null ? display.getRotation() : Surface.ROTATION_0;
+                if (rotation == Surface.ROTATION_90)
+                    transform = "cc";
+                else if (rotation == Surface.ROTATION_180)
+                    transform = "ud";
+                else if (rotation == Surface.ROTATION_270)
+                    transform = "c";
+                else
+                    transform = "no";
+            } else {
+                transform = "no";
+            }
+        }
+
+        float temp;
+        switch (transform) {
+            case "c":
+                temp = x;
+                x = -y;
+                y = temp;
+                break;
+            case "cc":
+                temp = x;
+                x = y;
+                y = -temp;
+                break;
+            case "ud":
+                x = -x;
+                y = -y;
+                break;
+            default:
+                break;
+        }
+        mTransformedPointerDelta[0] = x;
+        mTransformedPointerDelta[1] = y;
+    }
+
+    private void updateMouseButtons(MotionEvent event) {
 
         int currentBS = event.getButtonState();
         for (int[] btn : BUTTON_MAP) {
@@ -885,7 +1033,10 @@ public class MainActivity extends Activity
                 Native.nativeSendMouseButton(btn[1], isDown);
         }
         savedBS = currentBS;
-        return true;
+    }
+
+    private static float clamp(float value, float min, float max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     private boolean handleTouchpadScroll(MotionEvent event) {
