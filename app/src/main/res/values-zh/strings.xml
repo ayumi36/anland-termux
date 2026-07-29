@@ -19,7 +19,7 @@
     <string name="cat_keyboard_title">键盘与按键</string>
     <string name="cat_keyboard_subtitle">按键绑定、无障碍与扩展按键栏</string>
     <string name="cat_touchpad_title">触摸板与鼠标</string>
-    <string name="cat_touchpad_subtitle">触摸板模式与指针灵敏度</string>
+    <string name="cat_touchpad_subtitle">触摸板模式、指针捕获与灵敏度</string>
     <string name="cat_connection_subtitle">套接字、root、麦克风、摄像头与音频延迟</string>
     <string name="cat_display_subtitle">分辨率与屏幕方向</string>
     <string name="cat_general_title">通用</string>
@@ -59,6 +59,11 @@
     <string name="touchpad_hint">开启：手指滑动移动鼠标光标（相对）。关闭：触摸直接映射到屏幕（绝对）。</string>
     <string name="mouse_sensitivity_label">鼠标灵敏度（加速度）</string>
     <string name="mouse_accel_value">%1$.1f 倍</string>
+    <string name="pointer_capture_switch">尽可能捕获外部指针设备</string>
+    <string name="pointer_capture_hint">点击桌面视图后拦截硬件指针事件。按 Esc 键可将指针控制权交还给 Android。</string>
+    <string name="transform_captured_pointer_label">转换捕获的指针移动</string>
+    <string name="captured_pointer_speed_label">捕获的指针速度系数，%</string>
+    <string name="captured_pointer_speed_value">%1$d%%</string>
 
     <!-- Connection -->
     <string name="socket_path_label">守护进程套接字路径</string>
@@ -139,5 +144,13 @@
         <item>横屏</item>
         <item>反向竖屏</item>
         <item>反向横屏</item>
+    </string-array>
+
+    <string-array name="captured_pointer_transform_labels">
+        <item>不转换</item>
+        <item>顺时针</item>
+        <item>逆时针</item>
+        <item>上下颠倒</item>
+        <item>自动（触摸板）</item>
     </string-array>
 </resources>

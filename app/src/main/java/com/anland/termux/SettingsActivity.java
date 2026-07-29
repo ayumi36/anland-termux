@@ -67,6 +67,12 @@ public class SettingsActivity extends Activity {
     // ===== 新增：触摸板 Key =====
     private static final String KEY_TOUCHPAD_MODE = "touchpad_mode";
     private static final String KEY_MOUSE_ACCEL = "mouse_speed";
+    private static final String KEY_POINTER_CAPTURE = "pointer_capture";
+    private static final String KEY_TRANSFORM_CAPTURED_POINTER = "transform_captured_pointer";
+    private static final String KEY_CAPTURED_POINTER_SPEED_FACTOR = "captured_pointer_speed_factor";
+    private static final String[] CAPTURED_POINTER_TRANSFORMS = {
+        "no", "c", "cc", "ud", "at"
+    };
 
     // Latency presets: target buffer in ms (0 = auto). The user-visible labels live
     // in the R.array.latency_labels string-array, parallel to this array.
@@ -591,6 +597,98 @@ public class SettingsActivity extends Activity {
         });
         accelLayout.addView(accelSeek);
         root.addView(accelLayout);
+
+        buildPointerCaptureSection(root, prefs);
+    }
+
+    private void buildPointerCaptureSection(LinearLayout root, SharedPreferences prefs) {
+        Switch captureSwitch = new Switch(this);
+        captureSwitch.setText(R.string.pointer_capture_switch);
+        captureSwitch.setTextSize(14);
+        captureSwitch.setPadding(0, dp(8), 0, 0);
+        captureSwitch.setChecked(prefs.getBoolean(KEY_POINTER_CAPTURE, false));
+        root.addView(captureSwitch);
+
+        TextView captureHint = new TextView(this);
+        captureHint.setText(R.string.pointer_capture_hint);
+        captureHint.setTextSize(12);
+        captureHint.setTextColor(Color.GRAY);
+        captureHint.setPadding(0, dp(4), 0, dp(12));
+        root.addView(captureHint);
+
+        TextView transformLabel = new TextView(this);
+        transformLabel.setText(R.string.transform_captured_pointer_label);
+        transformLabel.setTextSize(14);
+        root.addView(transformLabel);
+
+        Spinner transformSpinner = new Spinner(this);
+        transformSpinner.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item,
+            getResources().getStringArray(R.array.captured_pointer_transform_labels)));
+        String currentTransform = prefs.getString(KEY_TRANSFORM_CAPTURED_POINTER,
+            CAPTURED_POINTER_TRANSFORMS[0]);
+        int selectedTransform = 0;
+        for (int i = 0; i < CAPTURED_POINTER_TRANSFORMS.length; i++) {
+            if (CAPTURED_POINTER_TRANSFORMS[i].equals(currentTransform)) {
+                selectedTransform = i;
+                break;
+            }
+        }
+        transformSpinner.setSelection(selectedTransform);
+        transformSpinner.setEnabled(captureSwitch.isChecked());
+        transformSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit().putString(KEY_TRANSFORM_CAPTURED_POINTER,
+                    CAPTURED_POINTER_TRANSFORMS[position]).apply();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        root.addView(transformSpinner);
+
+        LinearLayout speedLayout = new LinearLayout(this);
+        speedLayout.setOrientation(LinearLayout.VERTICAL);
+        speedLayout.setPadding(0, dp(12), 0, dp(16));
+
+        TextView speedLabel = new TextView(this);
+        speedLabel.setText(R.string.captured_pointer_speed_label);
+        speedLabel.setTextSize(14);
+        speedLayout.addView(speedLabel);
+
+        TextView speedValue = new TextView(this);
+        speedValue.setTextSize(14);
+        speedValue.setTextColor(Color.BLUE);
+        speedLayout.addView(speedValue);
+
+        SeekBar speedSeek = new SeekBar(this);
+        speedSeek.setMax(299);
+        int speedPercent = Math.max(1, Math.min(300,
+            prefs.getInt(KEY_CAPTURED_POINTER_SPEED_FACTOR, 100)));
+        speedSeek.setProgress(speedPercent - 1);
+        speedSeek.setEnabled(captureSwitch.isChecked());
+        speedValue.setText(getString(R.string.captured_pointer_speed_value, speedPercent));
+        speedSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int value = progress + 1;
+                speedValue.setText(getString(R.string.captured_pointer_speed_value, value));
+                if (fromUser)
+                    prefs.edit().putInt(KEY_CAPTURED_POINTER_SPEED_FACTOR, value).apply();
+            }
+
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        speedLayout.addView(speedSeek);
+        root.addView(speedLayout);
+
+        captureSwitch.setOnCheckedChangeListener((v, checked) -> {
+            prefs.edit().putBoolean(KEY_POINTER_CAPTURE, checked).apply();
+            transformSpinner.setEnabled(checked);
+            speedSeek.setEnabled(checked);
+        });
     }
 
     // Connection settings: a custom daemon socket path and a "connect with root"

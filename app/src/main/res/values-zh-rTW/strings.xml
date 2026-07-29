@@ -19,7 +19,7 @@
     <string name="cat_keyboard_title">鍵盤與按鍵</string>
     <string name="cat_keyboard_subtitle">按鍵綁定、無障礙與擴充按鍵列</string>
     <string name="cat_touchpad_title">觸控板與滑鼠</string>
-    <string name="cat_touchpad_subtitle">觸控板模式與指標靈敏度</string>
+    <string name="cat_touchpad_subtitle">觸控板模式、指標擷取與靈敏度</string>
     <string name="cat_connection_subtitle">socket、root、麥克風、相機與音訊延遲</string>
     <string name="cat_display_subtitle">解析度與螢幕方向</string>
     <string name="cat_general_title">一般</string>
@@ -59,6 +59,11 @@
     <string name="touchpad_hint">開啟：手指滑動移動滑鼠游標（相對）。關閉：觸控直接對應到螢幕（絕對）。</string>
     <string name="mouse_sensitivity_label">滑鼠靈敏度（加速度）</string>
     <string name="mouse_accel_value">%1$.1f 倍</string>
+    <string name="pointer_capture_switch">盡可能擷取外部指標裝置</string>
+    <string name="pointer_capture_hint">點按桌面檢視後攔截硬體指標事件。按 Esc 鍵可將指標控制權交還給 Android。</string>
+    <string name="transform_captured_pointer_label">轉換擷取的指標移動</string>
+    <string name="captured_pointer_speed_label">擷取的指標速度係數，%</string>
+    <string name="captured_pointer_speed_value">%1$d%%</string>
 
     <!-- Connection -->
     <string name="socket_path_label">守護程序 socket 路徑</string>
@@ -139,5 +144,13 @@
         <item>橫向</item>
         <item>反向直向</item>
         <item>反向橫向</item>
+    </string-array>
+
+    <string-array name="captured_pointer_transform_labels">
+        <item>不轉換</item>
+        <item>順時針</item>
+        <item>逆時針</item>
+        <item>上下顛倒</item>
+        <item>自動（觸控板）</item>
     </string-array>
 </resources>
