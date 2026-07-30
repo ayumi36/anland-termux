@@ -21,7 +21,7 @@
     <string name="cat_touchpad_title">触摸板与鼠标</string>
     <string name="cat_touchpad_subtitle">触摸板模式、指针捕获与灵敏度</string>
     <string name="cat_connection_subtitle">套接字、root、麦克风、摄像头与音频延迟</string>
-    <string name="cat_display_subtitle">分辨率、屏幕方向与屏幕缺角</string>
+    <string name="cat_display_subtitle">分辨率、屏幕方向、屏幕缺角与画中画</string>
     <string name="cat_general_title">通用</string>
     <string name="cat_general_subtitle">设置通知</string>
 
@@ -85,6 +85,8 @@
 
     <string name="screen_orientation_hint">控制桌面视图的屏幕方向。返回桌面时生效。</string>
     <string name="display_cutout_mode_label">屏幕缺角处理</string>
+    <string name="pip_mode_switch">画中画模式</string>
+    <string name="pip_mode_hint">按下主屏幕键或最近任务键时，以画中画模式显示应用。</string>
 
     <!-- Settings notification -->
     <string name="notification_switch">显示设置通知</string>

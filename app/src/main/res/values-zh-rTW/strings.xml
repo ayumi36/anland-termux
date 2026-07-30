@@ -21,7 +21,7 @@
     <string name="cat_touchpad_title">觸控板與滑鼠</string>
     <string name="cat_touchpad_subtitle">觸控板模式、指標擷取與靈敏度</string>
     <string name="cat_connection_subtitle">socket、root、麥克風、相機與音訊延遲</string>
-    <string name="cat_display_subtitle">解析度、螢幕方向與螢幕缺角</string>
+    <string name="cat_display_subtitle">解析度、螢幕方向、螢幕缺角與子母畫面</string>
     <string name="cat_general_title">一般</string>
     <string name="cat_general_subtitle">設定通知</string>
 
@@ -85,6 +85,8 @@
 
     <string name="screen_orientation_hint">控制桌面檢視的螢幕方向。返回桌面時生效。</string>
     <string name="display_cutout_mode_label">螢幕缺角處理</string>
+    <string name="pip_mode_switch">子母畫面模式</string>
+    <string name="pip_mode_hint">按下主畫面鍵或最近使用的應用程式鍵時，以子母畫面模式顯示應用程式。</string>
 
     <!-- Settings notification -->
     <string name="notification_switch">顯示設定通知</string>

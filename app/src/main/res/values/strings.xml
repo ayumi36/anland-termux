@@ -21,7 +21,7 @@
     <string name="cat_touchpad_title">Touchpad &amp; Mouse</string>
     <string name="cat_touchpad_subtitle">Touchpad mode, pointer capture &amp; sensitivity</string>
     <string name="cat_connection_subtitle">Socket, root, mic, camera &amp; audio latency</string>
-    <string name="cat_display_subtitle">Resolution, screen orientation &amp; display cutout</string>
+    <string name="cat_display_subtitle">Resolution, screen orientation, display cutout &amp; PIP</string>
     <string name="cat_general_title">General</string>
     <string name="cat_general_subtitle">Settings notification</string>
 
@@ -85,6 +85,8 @@
 
     <string name="screen_orientation_hint">Controls the desktop view orientation. Takes effect when you return to the desktop.</string>
     <string name="display_cutout_mode_label">Display cutout handling</string>
+    <string name="pip_mode_switch">PIP mode</string>
+    <string name="pip_mode_hint">Show the app in picture-in-picture mode when the Home or Recents button is pressed.</string>
 
     <!-- Settings notification -->
     <string name="notification_switch">Show settings notification</string>
