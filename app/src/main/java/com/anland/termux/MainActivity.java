@@ -2,10 +2,12 @@ package com.anland.termux;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AppOpsManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.PictureInPictureParams;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
@@ -78,6 +80,7 @@ public class MainActivity extends Activity
     // Persistent "tap to open Settings" notification, toggleable in Settings > General.
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
     private static final String KEY_SCREEN_ORIENTATION = "screen_orientation";
+    private static final String KEY_PIP_MODE = "pip_mode";
     private static final String KEY_POINTER_CAPTURE = "pointer_capture";
     private static final String KEY_TRANSFORM_CAPTURED_POINTER = "transform_captured_pointer";
     private static final String KEY_CAPTURED_POINTER_SPEED_FACTOR = "captured_pointer_speed_factor";
@@ -96,6 +99,8 @@ public class MainActivity extends Activity
     private boolean mPointerPositionKnown = false;
     private final float[] mTransformedPointerDelta = new float[2];
     private String mDisplayCutoutMode = DisplayCutoutMode.HIDE_ALL;
+    private boolean mPipTransitionPending = false;
+    private boolean mVirtualKeyboardVisibleBeforePip = false;
     // Layout JSON the current bar was built from; used to detect edits on resume.
     private String mAppliedLayoutJson = "";
 
@@ -423,6 +428,7 @@ public class MainActivity extends Activity
     @Override
     protected void onResume() {
         super.onResume();
+        mPipTransitionPending = false;
 
         String displayCutoutMode = DisplayCutoutMode.get(
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE));
@@ -534,11 +540,55 @@ public class MainActivity extends Activity
         DisplayManager dm = getSystemService(DisplayManager.class);
         if (dm != null)
             dm.unregisterDisplayListener(displayListener);
-        Native.nativeStop();
+        if (!mPipTransitionPending && !isInPictureInPictureMode())
+            Native.nativeStop();
+    }
+
+    private boolean hasPipPermission() {
+        AppOpsManager appOps = getSystemService(AppOpsManager.class);
+        return appOps != null && appOps.unsafeCheckOpNoThrow(
+            AppOpsManager.OPSTR_PICTURE_IN_PICTURE,
+            android.os.Process.myUid(), getPackageName()) == AppOpsManager.MODE_ALLOWED;
+    }
+
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        boolean pipEnabled = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getBoolean(KEY_PIP_MODE, false);
+        if (pipEnabled
+                && getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+                && hasPipPermission()) {
+            PictureInPictureParams params = new PictureInPictureParams.Builder().build();
+            mPipTransitionPending = enterPictureInPictureMode(params);
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode,
+            Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        mPipTransitionPending = false;
+
+        if (isInPictureInPictureMode) {
+            setExtraKeysBarVisible(false);
+            mVirtualKeyboardVisibleBeforePip = virtualKeyboardView != null
+                && virtualKeyboardView.getVisibility() == View.VISIBLE;
+            if (mVirtualKeyboardVisibleBeforePip)
+                virtualKeyboardView.setVisibility(View.GONE);
+        } else {
+            setExtraKeysBarVisible(shouldShowBar(systemIme.isImeVisible()));
+            if (mVirtualKeyboardVisibleBeforePip && virtualKeyboardView != null) {
+                virtualKeyboardView.setVisibility(View.VISIBLE);
+                virtualKeyboardView.post(this::positionVirtualKeyboard);
+            }
+            mVirtualKeyboardVisibleBeforePip = false;
+        }
     }
 
     @Override
     protected void onDestroy() {
+        Native.nativeStop();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm != null) nm.cancel(NOTIFICATION_ID);
         if (cameraInited) {

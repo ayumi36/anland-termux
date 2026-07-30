@@ -56,6 +56,7 @@ public class SettingsActivity extends Activity {
     private static final String KEY_KEYBOARD_FLOATING = "keyboard_floating";
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
     private static final String KEY_SCREEN_ORIENTATION = "screen_orientation";
+    private static final String KEY_PIP_MODE = "pip_mode";
     private static final String DEFAULT_SOCKET_PATH = "/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock";
     private static final int UNBOUND = -1;
 
@@ -289,6 +290,7 @@ public class SettingsActivity extends Activity {
         addResolutionSection(root);
         addScreenOrientationSection(root);
         addDisplayCutoutSection(root);
+        addPipSection(root);
         setContent(root);
     }
 
@@ -957,6 +959,26 @@ public class SettingsActivity extends Activity {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
         root.addView(modeSpinner);
+    }
+
+    private void addPipSection(LinearLayout root) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        Switch pipSwitch = new Switch(this);
+        pipSwitch.setText(R.string.pip_mode_switch);
+        pipSwitch.setTextSize(14);
+        pipSwitch.setPadding(0, dp(24), 0, 0);
+        pipSwitch.setChecked(prefs.getBoolean(KEY_PIP_MODE, false));
+        pipSwitch.setOnCheckedChangeListener((v, checked) ->
+            prefs.edit().putBoolean(KEY_PIP_MODE, checked).apply());
+        root.addView(pipSwitch);
+
+        TextView hint = new TextView(this);
+        hint.setText(R.string.pip_mode_hint);
+        hint.setTextSize(12);
+        hint.setTextColor(Color.GRAY);
+        hint.setPadding(0, dp(4), 0, 0);
+        root.addView(hint);
     }
 
     // Maps a res_preset_labels index to {width, height}, or null for the index-0
