@@ -21,7 +21,7 @@
     <string name="cat_touchpad_title">觸控板與滑鼠</string>
     <string name="cat_touchpad_subtitle">觸控板模式、指標擷取與靈敏度</string>
     <string name="cat_connection_subtitle">socket、root、麥克風、相機與音訊延遲</string>
-    <string name="cat_display_subtitle">解析度與螢幕方向</string>
+    <string name="cat_display_subtitle">解析度、螢幕方向與螢幕缺角</string>
     <string name="cat_general_title">一般</string>
     <string name="cat_general_subtitle">設定通知</string>
 
@@ -84,6 +84,7 @@
     <string name="resolution_hint">選擇預設或手動輸入數值。填 0 表示原生解析度。\"Screen ×\" 會依本裝置面板（橫向）縮放。下次連線時生效。</string>
 
     <string name="screen_orientation_hint">控制桌面檢視的螢幕方向。返回桌面時生效。</string>
+    <string name="display_cutout_mode_label">螢幕缺角處理</string>
 
     <!-- Settings notification -->
     <string name="notification_switch">顯示設定通知</string>
@@ -144,6 +145,13 @@
         <item>橫向</item>
         <item>反向直向</item>
         <item>反向橫向</item>
+    </string-array>
+
+    <string-array name="display_cutout_mode_labels">
+        <item>畫面延伸到全部缺角區域</item>
+        <item>畫面僅延伸到 R 角區域</item>
+        <item>畫面僅延伸到瀏海/挖孔區域</item>
+        <item>畫面避開全部缺角區域</item>
     </string-array>
 
     <string-array name="captured_pointer_transform_labels">

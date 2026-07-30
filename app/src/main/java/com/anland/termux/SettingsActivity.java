@@ -288,6 +288,7 @@ public class SettingsActivity extends Activity {
         LinearLayout root = newPage(R.string.section_display);
         addResolutionSection(root);
         addScreenOrientationSection(root);
+        addDisplayCutoutSection(root);
         setContent(root);
     }
 
@@ -920,6 +921,42 @@ public class SettingsActivity extends Activity {
         hint.setTextColor(Color.GRAY);
         hint.setPadding(0, dp(4), 0, 0);
         root.addView(hint);
+    }
+
+    private void addDisplayCutoutSection(LinearLayout root) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        TextView label = new TextView(this);
+        label.setText(R.string.display_cutout_mode_label);
+        label.setTextSize(16);
+        label.setPadding(0, dp(24), 0, dp(8));
+        root.addView(label);
+
+        Spinner modeSpinner = new Spinner(this);
+        modeSpinner.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item,
+            getResources().getStringArray(R.array.display_cutout_mode_labels)));
+
+        String current = DisplayCutoutMode.get(prefs);
+        int selected = 0;
+        for (int i = 0; i < DisplayCutoutMode.VALUES.length; i++) {
+            if (DisplayCutoutMode.VALUES[i].equals(current)) {
+                selected = i;
+                break;
+            }
+        }
+        modeSpinner.setSelection(selected);
+        modeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit().putString(DisplayCutoutMode.KEY,
+                    DisplayCutoutMode.VALUES[position]).apply();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        root.addView(modeSpinner);
     }
 
     // Maps a res_preset_labels index to {width, height}, or null for the index-0
