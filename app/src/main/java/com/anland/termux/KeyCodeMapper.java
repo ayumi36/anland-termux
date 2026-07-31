@@ -79,6 +79,21 @@ public class KeyCodeMapper {
         MAP.put(KeyEvent.KEYCODE_ASSIST, 125);
         MAP.put(KeyEvent.KEYCODE_CAPS_LOCK, 58);
 
+        // Volume and media keys (Linux evdev codes). These are used by the
+        // configurable user actions when the Android event has no scan code.
+        MAP.put(KeyEvent.KEYCODE_VOLUME_UP, 115);       // KEY_VOLUMEUP
+        MAP.put(KeyEvent.KEYCODE_VOLUME_DOWN, 114);     // KEY_VOLUMEDOWN
+        MAP.put(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, 164); // KEY_PLAYPAUSE
+        MAP.put(KeyEvent.KEYCODE_MEDIA_STOP, 128);      // KEY_STOP
+        MAP.put(KeyEvent.KEYCODE_MEDIA_NEXT, 163);      // KEY_NEXTSONG
+        MAP.put(KeyEvent.KEYCODE_MEDIA_PREVIOUS, 165);  // KEY_PREVIOUSSONG
+        MAP.put(KeyEvent.KEYCODE_MEDIA_REWIND, 168);    // KEY_REWIND
+        MAP.put(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, 208); // KEY_FASTFORWARD
+        MAP.put(KeyEvent.KEYCODE_MEDIA_PLAY, 207);      // KEY_PLAYCD
+        MAP.put(KeyEvent.KEYCODE_MEDIA_PAUSE, 201);     // KEY_PAUSECD
+        MAP.put(KeyEvent.KEYCODE_MEDIA_RECORD, 167);    // KEY_RECORD
+        MAP.put(KeyEvent.KEYCODE_HEADSETHOOK, 164);     // KEY_PLAYPAUSE
+
         // 方向键
         MAP.put(KeyEvent.KEYCODE_DPAD_UP, 103);
         MAP.put(KeyEvent.KEYCODE_DPAD_DOWN, 108);

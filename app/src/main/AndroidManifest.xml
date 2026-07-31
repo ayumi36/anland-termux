@@ -44,6 +44,9 @@
                 <action android:name="android.intent.action.MAIN" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".UserActionReceiver"
+            android:exported="false" />
         <service
             android:name=".KeyInterceptor"
             android:exported="true"

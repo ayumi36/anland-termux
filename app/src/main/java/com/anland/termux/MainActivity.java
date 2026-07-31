@@ -35,6 +35,7 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 import android.util.DisplayMetrics;   // ADDED
 
 import java.nio.charset.StandardCharsets;
@@ -70,7 +71,6 @@ public class MainActivity extends Activity
     private static final String KEY_ACCESSIBILITY_ENABLED = "accessibility_key_intercept";
     private static final String KEY_EXTRA_KEYS_ENABLED = "extra_keys_bar";
     private static final String KEY_AUTO_SHOW_EXTRA_KEYS = "auto_show_extra_keys";
-    private static final String KEY_BACK_OPENS_EXTRA_KEYS = "back_opens_extra_keys";
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
     // When on, the IME and extra-keys bar float over the display instead of
     // shrinking it: the bar rides up with the keyboard but the surface keeps
@@ -80,6 +80,9 @@ public class MainActivity extends Activity
     // Persistent "tap to open Settings" notification, toggleable in Settings > General.
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
     private static final String KEY_SCREEN_ORIENTATION = "screen_orientation";
+    private static final String[] SCREEN_ORIENTATIONS = {
+        "auto", "portrait", "landscape", "reverse portrait", "reverse landscape"
+    };
     private static final String KEY_PIP_MODE = "pip_mode";
     private static final String KEY_POINTER_CAPTURE = "pointer_capture";
     private static final String KEY_TRANSFORM_CAPTURED_POINTER = "transform_captured_pointer";
@@ -290,21 +293,72 @@ public class MainActivity extends Activity
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         nm.createNotificationChannel(channel);
 
-        Intent intent = new Intent(this, SettingsActivity.class);
-        intent.setAction(Intent.ACTION_MAIN);
-        PendingIntent pi = PendingIntent.getActivity(this, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        Notification notification = new Notification.Builder(this, NOTIFICATION_CHANNEL)
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        Notification.Builder builder = new Notification.Builder(this, NOTIFICATION_CHANNEL)
                 .setContentTitle(getString(R.string.notification_title))
                 .setContentText(getString(R.string.notification_text))
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentIntent(pi)
                 .setOngoing(true)
-                .setShowWhen(false)
-                .build();
+                .setShowWhen(false);
 
-        nm.notify(NOTIFICATION_ID, notification);
+        PendingIntent tapIntent = createNotificationIntent(
+            UserActions.getResponse(prefs, UserActions.NOTIFICATION_TAP), 0);
+        if (tapIntent != null)
+            builder.setContentIntent(tapIntent);
+
+        addNotificationAction(builder, prefs, UserActions.NOTIFICATION_FIRST_BUTTON, 1);
+        addNotificationAction(builder, prefs, UserActions.NOTIFICATION_SECOND_BUTTON, 2);
+
+        nm.notify(NOTIFICATION_ID, builder.build());
+    }
+
+    private void addNotificationAction(Notification.Builder builder, SharedPreferences prefs,
+            String action, int requestCode) {
+        String response = UserActions.getResponse(prefs, action);
+        PendingIntent intent = createNotificationIntent(response, requestCode);
+        int titleRes = notificationActionTitle(response);
+        if (intent != null && titleRes != 0)
+            builder.addAction(0, getString(titleRes), intent);
+    }
+
+    private PendingIntent createNotificationIntent(String response, int requestCode) {
+        if (UserActions.NO_ACTION.equals(response))
+            return null;
+
+        if (UserActions.OPEN_PREFERENCES.equals(response)) {
+            Intent intent = new Intent(this, SettingsActivity.class);
+            intent.setAction(Intent.ACTION_MAIN);
+            return PendingIntent.getActivity(this, requestCode, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        }
+
+        Intent intent = new Intent(this, UserActionReceiver.class);
+        intent.putExtra(UserActionReceiver.EXTRA_RESPONSE, response);
+        return PendingIntent.getBroadcast(this, requestCode, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private int notificationActionTitle(String response) {
+        switch (response) {
+            case UserActions.TOGGLE_SOFT_KEYBOARD:
+                return R.string.notification_action_toggle_ime;
+            case UserActions.TOGGLE_ADDITIONAL_KEY_BAR:
+                return R.string.notification_action_toggle_extra_keys;
+            case UserActions.OPEN_PREFERENCES:
+                return R.string.notification_action_preferences;
+            case UserActions.RELEASE_POINTER_AND_KEYBOARD_CAPTURE:
+                return R.string.notification_action_release_captures;
+            case UserActions.RESTART_ACTIVITY:
+                return R.string.notification_action_restart;
+            case UserActions.EXIT:
+                return R.string.notification_action_exit;
+            case UserActions.TOGGLE_TOUCHPAD_MODE:
+                return R.string.notification_action_touchpad_mode;
+            case UserActions.TOGGLE_SCREEN_ORIENTATION:
+                return R.string.notification_action_screen_orientation;
+            default:
+                return 0;
+        }
     }
 
     // ADDED: Helper to position virtual keyboard at bottom-center
@@ -530,6 +584,70 @@ public class MainActivity extends Activity
             setRequestedOrientation(requestedOrientation);
     }
 
+    void performUserAction(String response) {
+        if (response == null)
+            return;
+
+        switch (response) {
+            case UserActions.TOGGLE_SOFT_KEYBOARD:
+                systemIme.toggleSystemKeyboard();
+                break;
+            case UserActions.TOGGLE_ADDITIONAL_KEY_BAR:
+                toggleExtraKeysBar();
+                break;
+            case UserActions.OPEN_PREFERENCES:
+                startActivity(new Intent(this, SettingsActivity.class));
+                break;
+            case UserActions.RELEASE_POINTER_AND_KEYBOARD_CAPTURE:
+                if (surfaceView.hasPointerCapture())
+                    surfaceView.releasePointerCapture();
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                    .putBoolean(KEY_ACCESSIBILITY_ENABLED, false).apply();
+                KeyInterceptor.releaseCapture();
+                break;
+            case UserActions.RESTART_ACTIVITY:
+                recreate();
+                break;
+            case UserActions.EXIT:
+                finishAndRemoveTask();
+                break;
+            case UserActions.TOGGLE_TOUCHPAD_MODE:
+                toggleTouchpadMode();
+                break;
+            case UserActions.TOGGLE_SCREEN_ORIENTATION:
+                toggleScreenOrientation();
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void toggleTouchpadMode() {
+        isTouchpadMode = !isTouchpadMode;
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+            .putBoolean(KEY_TOUCHPAD_MODE, isTouchpadMode).apply();
+        Toast.makeText(this, isTouchpadMode
+            ? R.string.toast_touchpad_mode_relative
+            : R.string.toast_touchpad_mode_absolute, Toast.LENGTH_SHORT).show();
+    }
+
+    private void toggleScreenOrientation() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String current = prefs.getString(KEY_SCREEN_ORIENTATION, SCREEN_ORIENTATIONS[0]);
+        int next = 0;
+        for (int i = 0; i < SCREEN_ORIENTATIONS.length; i++) {
+            if (SCREEN_ORIENTATIONS[i].equals(current)) {
+                next = (i + 1) % SCREEN_ORIENTATIONS.length;
+                break;
+            }
+        }
+        prefs.edit().putString(KEY_SCREEN_ORIENTATION, SCREEN_ORIENTATIONS[next]).apply();
+        String label = getResources().getStringArray(R.array.screen_orientation_labels)[next];
+        Toast.makeText(this, getString(R.string.toast_screen_orientation, label),
+            Toast.LENGTH_SHORT).show();
+        applyScreenOrientation();
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -595,6 +713,8 @@ public class MainActivity extends Activity
             CameraServices.nativeDestroyCameraService();
             cameraInited = false;
         }
+        if (sInstance == this)
+            sInstance = null;
         super.onDestroy();
     }
 
@@ -907,23 +1027,20 @@ public class MainActivity extends Activity
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (event.getRepeatCount() > 0)
-            return true;
-
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         int boundKeycode = prefs.getInt(KEY_BOUND_KEYCODE, -1);
         if (boundKeycode != -1 && keyCode == boundKeycode) {
-            systemIme.toggleSystemKeyboard();   // Keep original bound key behavior (system IME)
+            if (event.getRepeatCount() == 0)
+                systemIme.toggleSystemKeyboard();
             return true;
         }
 
-        // Back key toggles the extra-keys bar (without opening the soft keyboard)
-        // when enabled in settings. Leaves the default swallow behaviour otherwise.
-        if (keyCode == KeyEvent.KEYCODE_BACK
-                && prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true)) {
-            toggleExtraKeysBar();
+        Boolean actionHandled = handleConfiguredUserAction(event);
+        if (actionHandled != null)
+            return actionHandled || super.onKeyDown(keyCode, event);
+
+        if (event.getRepeatCount() > 0)
             return true;
-        }
 
         forwardKeyToLinux(event);
         return true;
@@ -942,6 +1059,10 @@ public class MainActivity extends Activity
     // Called from KeyInterceptor (accessibility service) to handle keys that
     // the normal onKeyDown/onKeyUp might miss (e.g. Fn combos).
     public boolean handleAccessibilityKey(KeyEvent event) {
+        Boolean actionHandled = handleConfiguredUserAction(event);
+        if (actionHandled != null)
+            return actionHandled;
+
         if (event.getRepeatCount() > 0)
             return true;
 
@@ -988,9 +1109,64 @@ public class MainActivity extends Activity
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
+        Boolean actionHandled = handleConfiguredUserAction(event);
+        if (actionHandled != null)
+            return actionHandled || super.onKeyUp(keyCode, event);
+
         forwardKeyToLinux(event);
         releasePointerCaptureOnEscape(event);
         return true;
+    }
+
+    // Returns null when the event is not one of the configurable user actions.
+    private Boolean handleConfiguredUserAction(KeyEvent event) {
+        String action;
+        int keyCode = event.getKeyCode();
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            action = UserActions.VOLUME_UP;
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            action = UserActions.VOLUME_DOWN;
+        } else if (keyCode == KeyEvent.KEYCODE_BACK) {
+            action = UserActions.BACK_BUTTON;
+        } else if (isMediaSessionKey(keyCode)) {
+            action = UserActions.MEDIA_KEYS;
+        } else {
+            return null;
+        }
+
+        String response = UserActions.getResponse(
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE), action);
+        if (UserActions.NO_ACTION.equals(response))
+            return false;
+
+        if (UserActions.SEND_VOLUME_UP.equals(response)
+                || UserActions.SEND_VOLUME_DOWN.equals(response)
+                || UserActions.SEND_MEDIA_ACTION.equals(response)) {
+            forwardKeyToLinux(event);
+            return true;
+        }
+
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0)
+            performUserAction(response);
+        return true;
+    }
+
+    private static boolean isMediaSessionKey(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+            case KeyEvent.KEYCODE_MEDIA_PAUSE:
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+            case KeyEvent.KEYCODE_HEADSETHOOK:
+            case KeyEvent.KEYCODE_MEDIA_STOP:
+            case KeyEvent.KEYCODE_MEDIA_NEXT:
+            case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+            case KeyEvent.KEYCODE_MEDIA_REWIND:
+            case KeyEvent.KEYCODE_MEDIA_RECORD:
+            case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                return true;
+            default:
+                return false;
+        }
     }
 
     private void releasePointerCaptureOnEscape(KeyEvent event) {

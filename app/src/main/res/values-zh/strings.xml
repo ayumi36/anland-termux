@@ -13,6 +13,7 @@
     <string name="section_resolution">显示分辨率</string>
     <string name="section_screen_orientation">屏幕方向</string>
     <string name="section_notification">设置通知</string>
+    <string name="section_user_actions">响应用户操作</string>
 
     <!-- Settings home: category rows and back navigation -->
     <string name="nav_back">‹ 返回</string>
@@ -23,7 +24,7 @@
     <string name="cat_connection_subtitle">套接字、root、麦克风、摄像头与音频延迟</string>
     <string name="cat_display_subtitle">分辨率、屏幕方向、屏幕缺角与画中画</string>
     <string name="cat_general_title">通用</string>
-    <string name="cat_general_subtitle">设置通知</string>
+    <string name="cat_general_subtitle">通知与用户操作</string>
 
     <!-- Bind key -->
     <string name="bind_key_button">绑定虚拟键盘按键</string>
@@ -41,8 +42,6 @@
     <string name="extra_keys_hint">显示类似 Termux 的底部按键栏，包含 ESC/TAB/CTRL/ALT/方向键/PgUp 等。显示区域会缩小以腾出空间，按键栏会随软键盘一起升起。下次返回桌面视图时生效。</string>
     <string name="auto_show_switch">随软键盘自动显示扩展按键</string>
     <string name="auto_show_hint">开启时，扩展按键栏会随软键盘自动出现，并在软键盘关闭时隐藏。关闭时，按键栏会一直显示，直到在设置中手动切换。</string>
-    <string name="back_opens_switch">返回键打开扩展按键栏</string>
-    <string name="back_opens_hint">开启时，在扩展按键栏隐藏状态下按返回键会显示它，再次按返回键则隐藏。可用于无需先打开软键盘即可使用扩展按键。</string>
     <string name="keyboard_floating_switch">键盘悬浮（覆盖显示区域）</string>
     <string name="keyboard_floating_hint">开启时，软键盘和扩展按键栏会悬浮在显示区域之上，而不是缩小显示区域；按键栏使用半透明背景并随键盘升起，但显示区域不会被调整大小。关闭时保持原有行为（显示区域缩小以腾出空间）。下次返回桌面时生效。</string>
 
@@ -90,15 +89,47 @@
 
     <!-- Settings notification -->
     <string name="notification_switch">显示设置通知</string>
-    <string name="notification_hint">应用打开时显示一条常驻通知，点击可直接进入设置。关闭后不再显示。下次返回应用时生效。</string>
+    <string name="notification_hint">应用打开时显示一条常驻通知，其点击和按钮响应可在下方配置。关闭后不再显示。下次返回应用时生效。</string>
     <string name="notification_channel_name">Anland Termux</string>
     <string name="notification_channel_desc">Anland 快速访问</string>
     <string name="notification_title">Anland Termux</string>
-    <string name="notification_text">点击进入设置</string>
+    <string name="notification_text">点击或下拉以使用已配置的操作</string>
+
+    <!-- User actions -->
+    <string name="user_action_volume_up">音量增大</string>
+    <string name="user_action_volume_down">音量减小</string>
+    <string name="user_action_back_button">返回按钮</string>
+    <string name="user_action_notification_tap">点击通知</string>
+    <string name="user_action_notification_first_button">通知第一个按钮</string>
+    <string name="user_action_notification_second_button">通知第二个按钮</string>
+    <string name="user_action_media_keys">媒体按键</string>
+    <string name="user_response_no_action">无操作</string>
+    <string name="user_response_toggle_soft_keyboard">切换软键盘</string>
+    <string name="user_response_toggle_additional_key_bar">切换扩展按键栏</string>
+    <string name="user_response_open_preferences">打开设置</string>
+    <string name="user_response_release_captures">释放指针和键盘捕获</string>
+    <string name="user_response_restart_activity">重启 Activity</string>
+    <string name="user_response_exit">退出</string>
+    <string name="user_response_toggle_touchpad_mode">切换触摸板模式</string>
+    <string name="user_response_toggle_screen_orientation">切换屏幕方向</string>
+    <string name="user_response_send_volume_up">发送音量增大按键</string>
+    <string name="user_response_send_volume_down">发送音量减小按键</string>
+    <string name="user_response_send_media_action">发送媒体按键</string>
+    <string name="notification_action_preferences">设置</string>
+    <string name="notification_action_exit">退出</string>
+    <string name="notification_action_restart">重启</string>
+    <string name="notification_action_toggle_ime">切换输入法</string>
+    <string name="notification_action_toggle_extra_keys">切换扩展按键</string>
+    <string name="notification_action_release_captures">释放捕获</string>
+    <string name="notification_action_touchpad_mode">触摸板模式</string>
+    <string name="notification_action_screen_orientation">屏幕方向</string>
 
     <!-- Toasts -->
     <string name="toast_no_picker">没有可用的文件选择器</string>
     <string name="toast_read_failed">无法读取文件</string>
+    <string name="toast_touchpad_mode_relative">触摸板模式已切换为相对模式</string>
+    <string name="toast_touchpad_mode_absolute">触摸板模式已切换为绝对模式</string>
+    <string name="toast_screen_orientation">屏幕方向已切换为%1$s</string>
 
     <!-- Hardware key names -->
     <string name="key_volume_up">音量+</string>

@@ -51,7 +51,6 @@ public class SettingsActivity extends Activity {
     private static final String KEY_ACCESSIBILITY_ENABLED = "accessibility_key_intercept";
     private static final String KEY_EXTRA_KEYS_ENABLED = "extra_keys_bar";
     private static final String KEY_AUTO_SHOW_EXTRA_KEYS = "auto_show_extra_keys";
-    private static final String KEY_BACK_OPENS_EXTRA_KEYS = "back_opens_extra_keys";
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
     private static final String KEY_KEYBOARD_FLOATING = "keyboard_floating";
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
@@ -298,6 +297,7 @@ public class SettingsActivity extends Activity {
         currentPage = Page.GENERAL;
         LinearLayout root = newPage(R.string.cat_general_title);
         buildNotificationSection(root);
+        buildUserActionsSection(root);
         setContent(root);
     }
 
@@ -409,24 +409,6 @@ public class SettingsActivity extends Activity {
         autoShowHint.setTextColor(Color.GRAY);
         autoShowHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(autoShowHint);
-
-        // === Back key opens extra keys bar ===
-        Switch backOpensExtraKeysSwitch = new Switch(this);
-        backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
-        backOpensExtraKeysSwitch.setTextSize(14);
-        backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
-        backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
-        backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
-        root.addView(backOpensExtraKeysSwitch);
-
-        TextView backOpensExtraKeysHint = new TextView(this);
-        backOpensExtraKeysHint.setText(R.string.back_opens_hint);
-        backOpensExtraKeysHint.setTextSize(12);
-        backOpensExtraKeysHint.setTextColor(Color.GRAY);
-        backOpensExtraKeysHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(backOpensExtraKeysHint);
 
         // === Keyboard floating ===
         Switch keyboardFloatingSwitch = new Switch(this);
@@ -540,6 +522,94 @@ public class SettingsActivity extends Activity {
         notificationHint.setTextColor(Color.GRAY);
         notificationHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(notificationHint);
+    }
+
+    private void buildUserActionsSection(LinearLayout root) {
+        TextView header = new TextView(this);
+        header.setText(R.string.section_user_actions);
+        header.setTextSize(16);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setPadding(0, dp(24), 0, dp(8));
+        root.addView(header);
+
+        addUserActionSpinner(root, R.string.user_action_volume_up, UserActions.VOLUME_UP);
+        addUserActionSpinner(root, R.string.user_action_volume_down, UserActions.VOLUME_DOWN);
+        addUserActionSpinner(root, R.string.user_action_back_button, UserActions.BACK_BUTTON);
+        addUserActionSpinner(root, R.string.user_action_notification_tap,
+            UserActions.NOTIFICATION_TAP);
+        addUserActionSpinner(root, R.string.user_action_notification_first_button,
+            UserActions.NOTIFICATION_FIRST_BUTTON);
+        addUserActionSpinner(root, R.string.user_action_notification_second_button,
+            UserActions.NOTIFICATION_SECOND_BUTTON);
+        addUserActionSpinner(root, R.string.user_action_media_keys, UserActions.MEDIA_KEYS);
+    }
+
+    private void addUserActionSpinner(LinearLayout root, int labelRes, String action) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        TextView label = new TextView(this);
+        label.setText(labelRes);
+        label.setTextSize(14);
+        label.setPadding(0, dp(12), 0, dp(4));
+        root.addView(label);
+
+        String[] responses = UserActions.responsesFor(action);
+        String[] labels = new String[responses.length];
+        for (int i = 0; i < responses.length; i++)
+            labels[i] = getString(responseLabelResource(responses[i]));
+
+        Spinner spinner = new Spinner(this);
+        spinner.setAdapter(new ArrayAdapter<>(this,
+            android.R.layout.simple_spinner_dropdown_item, labels));
+
+        String current = UserActions.getResponse(prefs, action);
+        int selected = 0;
+        for (int i = 0; i < responses.length; i++) {
+            if (responses[i].equals(current)) {
+                selected = i;
+                break;
+            }
+        }
+        spinner.setSelection(selected);
+        spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                prefs.edit().putString(action, responses[position]).apply();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        root.addView(spinner);
+    }
+
+    private int responseLabelResource(String response) {
+        switch (response) {
+            case UserActions.TOGGLE_SOFT_KEYBOARD:
+                return R.string.user_response_toggle_soft_keyboard;
+            case UserActions.TOGGLE_ADDITIONAL_KEY_BAR:
+                return R.string.user_response_toggle_additional_key_bar;
+            case UserActions.OPEN_PREFERENCES:
+                return R.string.user_response_open_preferences;
+            case UserActions.RELEASE_POINTER_AND_KEYBOARD_CAPTURE:
+                return R.string.user_response_release_captures;
+            case UserActions.RESTART_ACTIVITY:
+                return R.string.user_response_restart_activity;
+            case UserActions.EXIT:
+                return R.string.user_response_exit;
+            case UserActions.TOGGLE_TOUCHPAD_MODE:
+                return R.string.user_response_toggle_touchpad_mode;
+            case UserActions.TOGGLE_SCREEN_ORIENTATION:
+                return R.string.user_response_toggle_screen_orientation;
+            case UserActions.SEND_VOLUME_UP:
+                return R.string.user_response_send_volume_up;
+            case UserActions.SEND_VOLUME_DOWN:
+                return R.string.user_response_send_volume_down;
+            case UserActions.SEND_MEDIA_ACTION:
+                return R.string.user_response_send_media_action;
+            default:
+                return R.string.user_response_no_action;
+        }
     }
 
     // ============================================================
