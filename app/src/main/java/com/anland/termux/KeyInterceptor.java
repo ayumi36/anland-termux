@@ -75,6 +75,11 @@ public class KeyInterceptor extends AccessibilityService {
         self.enabled = false;
     }
 
+    public static void releaseCapture() {
+        handler.removeCallbacks(disableImmediatelyCallback);
+        disableImmediately();
+    }
+
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
