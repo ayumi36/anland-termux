@@ -39,7 +39,7 @@
             android:resizeableActivity="true"
             android:supportsPictureInPicture="false"
             android:taskAffinity=".SettingsActivity"
-            android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+            android:theme="@style/Theme.AnlandTermux.Settings">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
             </intent-filter>
