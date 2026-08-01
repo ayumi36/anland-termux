@@ -41,7 +41,7 @@
     <string name="extra_keys_switch">扩展按键栏（特殊按键）</string>
     <string name="extra_keys_hint">显示类似 Termux 的底部按键栏，包含 ESC/TAB/CTRL/ALT/方向键/PgUp 等。显示区域会缩小以腾出空间，按键栏会随软键盘一起升起。下次返回桌面视图时生效。</string>
     <string name="auto_show_switch">随软键盘自动显示扩展按键</string>
-    <string name="auto_show_hint">开启时，扩展按键栏会随软键盘自动出现，并在软键盘关闭时隐藏。关闭时，按键栏会一直显示，直到在设置中手动切换。</string>
+    <string name="auto_show_hint">开启时，扩展按键栏会跟随软键盘显示或隐藏。关闭时，软键盘不会改变按键栏状态；可在设置中或通过已配置的用户操作手动切换。</string>
     <string name="keyboard_floating_switch">键盘悬浮（覆盖显示区域）</string>
     <string name="keyboard_floating_hint">开启时，软键盘和扩展按键栏会悬浮在显示区域之上，而不是缩小显示区域；按键栏使用半透明背景并随键盘升起，但显示区域不会被调整大小。关闭时保持原有行为（显示区域缩小以腾出空间）。下次返回桌面时生效。</string>
 

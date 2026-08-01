@@ -875,7 +875,7 @@ public class MainActivity extends Activity
         mImeBottom = newImeBottom;
 
         if (imeVisible != wasImeVisible)
-            setExtraKeysBarVisible(shouldShowBar(imeVisible));
+            syncExtraKeysBarWithIme(imeVisible);
 
         relayout();
     }
@@ -884,13 +884,22 @@ public class MainActivity extends Activity
     // switches are independent: with "auto-show" ON the bar tracks the keyboard
     // (regardless of the master switch), so it appears whenever the IME opens —
     // including via the bound virtual-keyboard key, the app's only other opener.
-    // With "auto-show" OFF the master switch keeps the bar persistently visible.
+    // With "auto-show" OFF the master switch sets the lifecycle baseline; IME
+    // changes then preserve any temporary visibility chosen by a user action.
     private boolean shouldShowBar(boolean imeVisible) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean autoShow = prefs.getBoolean(KEY_AUTO_SHOW_EXTRA_KEYS, true);
         if (autoShow)
             return imeVisible;
         return prefs.getBoolean(KEY_EXTRA_KEYS_ENABLED, false);
+    }
+
+    // IME changes only control the bar in auto-show mode. Otherwise a user action
+    // may temporarily show or hide the bar without the next IME callback undoing it.
+    private void syncExtraKeysBarWithIme(boolean imeVisible) {
+        if (getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(KEY_AUTO_SHOW_EXTRA_KEYS, true))
+            setExtraKeysBarVisible(imeVisible);
     }
 
     // Recompute the surface bottom margin and the bar position from the current
@@ -996,10 +1005,10 @@ public class MainActivity extends Activity
     }
 
     // The IME was shown/hidden via SystemIME's toggle. In freeform mode the inset
-    // callback may not fire, so sync the extra-keys bar explicitly here in all modes.
+    // callback may not fire, so explicitly apply the auto-show behavior here.
     @Override
     public void onImeVisibilityChanged(boolean visible) {
-        setExtraKeysBarVisible(shouldShowBar(visible));
+        syncExtraKeysBarWithIme(visible);
     }
 
     // ================================================================
