@@ -19,6 +19,7 @@ import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.InputDevice;
@@ -103,6 +104,15 @@ public class MainActivity extends Activity
     private float mPointerY = 0f;
     private boolean mPointerPositionKnown = false;
     private final float[] mTransformedPointerDelta = new float[2];
+    private Touchpad mCapturedTouchpad;
+    private int mCapturedTouchpadDeviceId = -1;
+    private boolean mCapturedTouchpadBaselineValid = false;
+    private int mCapturedTouchpadBaselinePointers = 0;
+    private float mCapturedTouchpadLastCentroidX = 0f;
+    private float mCapturedTouchpadLastCentroidY = 0f;
+    private final float[] mCapturedTouchpadResolvedDelta = new float[2];
+    private final SparseArray<Float> mButtonDragLastX = new SparseArray<>();
+    private final SparseArray<Float> mButtonDragLastY = new SparseArray<>();
     private String mDisplayCutoutMode = DisplayCutoutMode.HIDE_ALL;
     private boolean mPipTransitionPending = false;
     private boolean mVirtualKeyboardVisibleBeforePip = false;
@@ -194,12 +204,27 @@ public class MainActivity extends Activity
         getWindow().setDecorFitsSystemWindows(false);
 
         surfaceView = new SurfaceView(this);
+        surfaceView.setFocusable(true);
         surfaceView.setFocusableInTouchMode(true);
-        surfaceView.setOnCapturedPointerListener((v, event) ->
-            handleCapturedPointerEvent(event));
         systemIme = new SystemIME(this, this);
 
-        FrameLayout root = new FrameLayout(this);
+        FrameLayout root = new FrameLayout(this) {
+            @Override
+            public boolean dispatchCapturedPointerEvent(MotionEvent event) {
+                if (handleCapturedPointerEvent(event))
+                    return true;
+                return super.dispatchCapturedPointerEvent(event);
+            }
+
+            @Override
+            public void dispatchPointerCaptureChanged(boolean hasCapture) {
+                super.dispatchPointerCaptureChanged(hasCapture);
+                if (!hasCapture) {
+                    releaseAllMouseButtons();
+                    resetCapturedTouchpadGesture();
+                }
+            }
+        };
         root.setBackgroundColor(Color.BLACK);
         root.addView(surfaceView, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
@@ -212,6 +237,7 @@ public class MainActivity extends Activity
         // count / height) comes from the user's JSON config; see buildExtraKeysBar.
         mRoot = root;
         mDensity = getResources().getDisplayMetrics().density;
+        mCapturedTouchpad = new Touchpad(this, new CapturedTouchpadOutput(), false);
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_KEYBOARD_FLOATING, true);
         buildExtraKeysBar();
@@ -655,6 +681,8 @@ public class MainActivity extends Activity
         super.onPause();
         if (surfaceView.hasPointerCapture())
             surfaceView.releasePointerCapture();
+        releaseAllMouseButtons();
+        resetCapturedTouchpadGesture();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm != null) nm.cancel(NOTIFICATION_ID);
         DisplayManager dm = getSystemService(DisplayManager.class);
@@ -823,6 +851,8 @@ public class MainActivity extends Activity
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         surfaceReady = false;
+        releaseAllMouseButtons();
+        resetCapturedTouchpadGesture();
         Native.nativeStop();
     }
 
@@ -1262,53 +1292,423 @@ public class MainActivity extends Activity
             surfaceView.releasePointerCapture();
     }
 
+    private final class CapturedTouchpadOutput implements Touchpad.Output {
+        @Override
+        public void onMotion(float dx, float dy) {
+            // Raw relative axes drive the cursor so motion is not applied twice.
+        }
+
+        @Override
+        public void onScroll(int axis, float value) {
+            Native.nativeSendMouseScroll(axis, value);
+        }
+
+        @Override
+        public void onButton(int button, boolean pressed) {
+            Native.nativeSendMouseButton(button, pressed);
+        }
+
+        @Override
+        public void onTouch(int action, int pointerId, float x, float y) {
+            Native.nativeSendTouch(action,
+                x * capturedPointerScaleX(), y * capturedPointerScaleY(), pointerId);
+        }
+
+        @Override
+        public void onTouchFrame() {
+            Native.nativeSendTouchFrame();
+        }
+
+        @Override
+        public float cursorX() {
+            ensureCapturedPointerPosition();
+            return mPointerX / capturedPointerScaleX();
+        }
+
+        @Override
+        public float cursorY() {
+            ensureCapturedPointerPosition();
+            return mPointerY / capturedPointerScaleY();
+        }
+    }
+
+    /** Handle relative mice and hardware touchpads delivered through pointer capture. */
     private boolean handleCapturedPointerEvent(MotionEvent event) {
+        boolean isTouchpad = event.isFromSource(InputDevice.SOURCE_TOUCHPAD);
+        boolean isRelativeMouse = !isTouchpad
+            && event.isFromSource(InputDevice.SOURCE_MOUSE_RELATIVE);
+        if (!isTouchpad && !isRelativeMouse)
+            return false;
+
+        if (isTouchpad)
+            return handleCapturedTouchpadEvent(event);
+
         int action = event.getActionMasked();
-        if (action == MotionEvent.ACTION_SCROLL) {
-            float vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
-            float hScroll = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
-            if (vScroll != 0)
-                Native.nativeSendMouseScroll(0, -vScroll * 10);
-            if (hScroll != 0)
-                Native.nativeSendMouseScroll(1, hScroll * 10);
-        } else if (action == MotionEvent.ACTION_MOVE && event.getPointerCount() == 1) {
-            InputDevice device = event.getDevice();
-            boolean hasRelativeAxes = device != null
-                && device.getMotionRange(MotionEvent.AXIS_RELATIVE_X) != null;
-            boolean isRelativeMouse = (event.getSource() & InputDevice.SOURCE_MOUSE_RELATIVE)
-                == InputDevice.SOURCE_MOUSE_RELATIVE;
+        if (action == MotionEvent.ACTION_MOVE || action == MotionEvent.ACTION_HOVER_MOVE) {
+            for (int i = 0; i < event.getHistorySize(); i++)
+                processCapturedRelativeMouseSample(event, i);
+            processCapturedRelativeMouseSample(event, -1);
+        } else if (action == MotionEvent.ACTION_SCROLL) {
+            for (int i = 0; i < event.getHistorySize(); i++)
+                sendCapturedScrollAxes(event, i);
+            sendCapturedScrollAxes(event, -1);
+        }
 
-            if (hasRelativeAxes || isRelativeMouse) {
-                float dx = hasRelativeAxes
-                    ? event.getAxisValue(MotionEvent.AXIS_RELATIVE_X) : event.getX();
-                float dy = hasRelativeAxes
-                    ? event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y) : event.getY();
-                transformCapturedPointerDelta(dx, dy, event.getSource());
+        if (action == MotionEvent.ACTION_CANCEL)
+            releaseAllMouseButtons();
+        else
+            updateMouseButtonStateFromEvent(event);
+        return true;
+    }
 
-                float scaleX = (customScreenWidth > 0 && viewWidth > 0)
-                    ? (float) customScreenWidth / viewWidth : 1f;
-                float scaleY = (customScreenHeight > 0 && viewHeight > 0)
-                    ? (float) customScreenHeight / viewHeight : 1f;
-                dx = mTransformedPointerDelta[0]
-                    * mCapturedPointerSpeedFactor * mDensity * scaleX;
-                dy = mTransformedPointerDelta[1]
-                    * mCapturedPointerSpeedFactor * mDensity * scaleY;
+    private void processCapturedRelativeMouseSample(MotionEvent event, int historyPos) {
+        InputDevice device = event.getDevice();
+        boolean hasRelativeX = device != null
+            && device.getMotionRange(MotionEvent.AXIS_RELATIVE_X) != null;
+        boolean hasRelativeY = device != null
+            && device.getMotionRange(MotionEvent.AXIS_RELATIVE_Y) != null;
+        float dx = hasRelativeX
+            ? capturedAxis(event, MotionEvent.AXIS_RELATIVE_X, 0, historyPos)
+            : capturedCoordinate(event, true, 0, historyPos);
+        float dy = hasRelativeY
+            ? capturedAxis(event, MotionEvent.AXIS_RELATIVE_Y, 0, historyPos)
+            : capturedCoordinate(event, false, 0, historyPos);
+        moveCapturedPointerBy(dx, dy, event.getSource());
+    }
 
-                int outputWidth = customScreenWidth > 0 ? customScreenWidth : viewWidth;
-                int outputHeight = customScreenHeight > 0 ? customScreenHeight : viewHeight;
-                if (!mPointerPositionKnown) {
-                    mPointerX = Math.max(0, outputWidth) / 2f;
-                    mPointerY = Math.max(0, outputHeight) / 2f;
-                    mPointerPositionKnown = true;
-                }
-                mPointerX = clamp(mPointerX + dx, 0f, Math.max(0, outputWidth));
-                mPointerY = clamp(mPointerY + dy, 0f, Math.max(0, outputHeight));
-                Native.nativeSendMouseMotion(mPointerX, mPointerY, dx, dy);
+    private boolean handleCapturedTouchpadEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        int pointerCount = event.getPointerCount();
+        boolean hasButton = event.getButtonState() != 0
+            || action == MotionEvent.ACTION_BUTTON_PRESS
+            || action == MotionEvent.ACTION_BUTTON_RELEASE;
+        boolean canceled = action == MotionEvent.ACTION_CANCEL
+            || ((action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_UP)
+                && (event.getFlags() & MotionEvent.FLAG_CANCELED) != 0);
+        boolean explicitScroll = (action == MotionEvent.ACTION_MOVE
+            || action == MotionEvent.ACTION_HOVER_MOVE)
+            && hasCapturedTouchpadScrollAxes(event);
+        boolean scrollEvent = action == MotionEvent.ACTION_SCROLL || explicitScroll;
+        boolean leftOrRightHeld = (effectiveButtonState(event)
+            & (MotionEvent.BUTTON_PRIMARY | MotionEvent.BUTTON_SECONDARY)) != 0;
+
+        if (!leftOrRightHeld) {
+            mButtonDragLastX.clear();
+            mButtonDragLastY.clear();
+        }
+
+        if (canceled) {
+            mCapturedTouchpad.cancel();
+            mCapturedTouchpadBaselineValid = false;
+        } else if (scrollEvent) {
+            mCapturedTouchpad.cancel();
+            for (int i = 0; i < event.getHistorySize(); i++)
+                sendCapturedScrollAxes(event, i);
+            sendCapturedScrollAxes(event, -1);
+            mCapturedTouchpadBaselineValid = false;
+        } else if (hasButton) {
+            mCapturedTouchpad.cancel();
+        } else {
+            updateCapturedTouchpadBounds(event);
+            mCapturedTouchpad.onTouch(event);
+        }
+
+        if (!canceled && !scrollEvent && !mCapturedTouchpad.isForwardingTouch()) {
+            switch (action) {
+                case MotionEvent.ACTION_DOWN:
+                    setCapturedTouchpadBaseline(event, -1);
+                    mButtonDragLastX.clear();
+                    mButtonDragLastY.clear();
+                    break;
+                case MotionEvent.ACTION_POINTER_DOWN:
+                case MotionEvent.ACTION_POINTER_UP:
+                    mCapturedTouchpadBaselineValid = false;
+                    mButtonDragLastX.clear();
+                    mButtonDragLastY.clear();
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                case MotionEvent.ACTION_HOVER_MOVE:
+                    if (pointerCount == 1) {
+                        for (int i = 0; i < event.getHistorySize(); i++)
+                            processCapturedTouchpadMotionSample(event, i);
+                        processCapturedTouchpadMotionSample(event, -1);
+                    } else if (leftOrRightHeld) {
+                        processCapturedTouchpadButtonDrag(event);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    mCapturedTouchpadBaselineValid = false;
+                    mButtonDragLastX.clear();
+                    mButtonDragLastY.clear();
+                    break;
+                default:
+                    break;
             }
         }
 
-        updateMouseButtons(event);
+        if (action == MotionEvent.ACTION_CANCEL)
+            releaseAllMouseButtons();
+        else
+            updateMouseButtonStateFromEvent(event);
         return true;
+    }
+
+    private void processCapturedTouchpadMotionSample(MotionEvent event, int historyPos) {
+        if (event.getPointerCount() != 1)
+            return;
+        float dx = capturedAxis(event, MotionEvent.AXIS_RELATIVE_X, 0, historyPos);
+        float dy = capturedAxis(event, MotionEvent.AXIS_RELATIVE_Y, 0, historyPos);
+        float[] resolved = applyCapturedTouchpadAbsoluteFallback(
+            event, historyPos, dx, dy);
+        moveCapturedPointerBy(resolved[0], resolved[1], event.getSource());
+    }
+
+    private void processCapturedTouchpadButtonDrag(MotionEvent event) {
+        int pointerCount = event.getPointerCount();
+        if (pointerCount < 2)
+            return;
+        float scaleX = capturedTouchpadCoordinateScale(
+            event, MotionEvent.AXIS_X, true);
+        float scaleY = capturedTouchpadCoordinateScale(
+            event, MotionEvent.AXIS_Y, false);
+
+        for (int i = mButtonDragLastX.size() - 1; i >= 0; i--) {
+            int id = mButtonDragLastX.keyAt(i);
+            if (event.findPointerIndex(id) < 0) {
+                mButtonDragLastX.removeAt(i);
+                mButtonDragLastY.delete(id);
+            }
+        }
+
+        float bestDx = 0f;
+        float bestDy = 0f;
+        float bestMagnitude = -1f;
+        for (int i = 0; i < pointerCount; i++) {
+            int id = event.getPointerId(i);
+            float lastX = mButtonDragLastX.get(id, Float.NaN);
+            float lastY = mButtonDragLastY.get(id, Float.NaN);
+            if (Float.isNaN(lastX) || Float.isNaN(lastY))
+                continue;
+            float dx = (event.getX(i) - lastX) * scaleX;
+            float dy = (event.getY(i) - lastY) * scaleY;
+            float magnitude = dx * dx + dy * dy;
+            if (magnitude > bestMagnitude) {
+                bestMagnitude = magnitude;
+                bestDx = dx;
+                bestDy = dy;
+            }
+        }
+
+        for (int i = 0; i < pointerCount; i++) {
+            int id = event.getPointerId(i);
+            mButtonDragLastX.put(id, event.getX(i));
+            mButtonDragLastY.put(id, event.getY(i));
+        }
+
+        if (bestMagnitude > 0f)
+            moveCapturedPointerBy(bestDx, bestDy, event.getSource());
+    }
+
+    private void updateCapturedTouchpadBounds(MotionEvent event) {
+        int width = capturedPointerViewWidth();
+        int height = capturedPointerViewHeight();
+        mCapturedTouchpad.setOutputSize(width, height);
+        if (event.getDeviceId() == mCapturedTouchpadDeviceId)
+            return;
+        InputDevice.MotionRange xRange = capturedPadRange(event, MotionEvent.AXIS_X);
+        InputDevice.MotionRange yRange = capturedPadRange(event, MotionEvent.AXIS_Y);
+        if (xRange == null || yRange == null
+                || xRange.getRange() <= 0f || yRange.getRange() <= 0f)
+            return;
+        mCapturedTouchpadDeviceId = event.getDeviceId();
+        mCapturedTouchpad.setInputBounds(xRange.getMin(), yRange.getMin(),
+            xRange.getRange(), yRange.getRange());
+    }
+
+    private InputDevice.MotionRange capturedPadRange(MotionEvent event, int axis) {
+        InputDevice device = event.getDevice();
+        if (device == null)
+            return null;
+        InputDevice.MotionRange range =
+            device.getMotionRange(axis, InputDevice.SOURCE_TOUCHPAD);
+        return range != null ? range : device.getMotionRange(axis);
+    }
+
+    private float[] applyCapturedTouchpadAbsoluteFallback(
+            MotionEvent event, int historyPos, float dx, float dy) {
+        int pointerCount = event.getPointerCount();
+        float centroidX = capturedTouchpadCentroid(event, historyPos, true);
+        float centroidY = capturedTouchpadCentroid(event, historyPos, false);
+        if (dx == 0f && dy == 0f
+                && mCapturedTouchpadBaselineValid
+                && mCapturedTouchpadBaselinePointers == pointerCount) {
+            dx = (centroidX - mCapturedTouchpadLastCentroidX)
+                * capturedTouchpadCoordinateScale(event, MotionEvent.AXIS_X, true);
+            dy = (centroidY - mCapturedTouchpadLastCentroidY)
+                * capturedTouchpadCoordinateScale(event, MotionEvent.AXIS_Y, false);
+        }
+        mCapturedTouchpadLastCentroidX = centroidX;
+        mCapturedTouchpadLastCentroidY = centroidY;
+        mCapturedTouchpadBaselinePointers = pointerCount;
+        mCapturedTouchpadBaselineValid = true;
+        mCapturedTouchpadResolvedDelta[0] = dx;
+        mCapturedTouchpadResolvedDelta[1] = dy;
+        return mCapturedTouchpadResolvedDelta;
+    }
+
+    private float capturedTouchpadCoordinateScale(
+            MotionEvent event, int axis, boolean xAxis) {
+        InputDevice.MotionRange range = capturedPadRange(event, axis);
+        float span = range == null ? 0f : range.getRange();
+        int size = xAxis ? capturedPointerViewWidth() : capturedPointerViewHeight();
+        return span > 0f && size > 0 ? size / span : 0f;
+    }
+
+    private void sendCapturedScrollAxes(MotionEvent event, int historyPos) {
+        if (event.getPointerCount() <= 0)
+            return;
+        float vScroll = capturedAxis(
+            event, MotionEvent.AXIS_VSCROLL, 0, historyPos);
+        float hScroll = capturedAxis(
+            event, MotionEvent.AXIS_HSCROLL, 0, historyPos);
+        if (vScroll != 0f || hScroll != 0f) {
+            if (vScroll != 0f)
+                Native.nativeSendMouseScroll(0, -vScroll * 10f);
+            if (hScroll != 0f)
+                Native.nativeSendMouseScroll(1, hScroll * 10f);
+            return;
+        }
+
+        float gestureX = capturedAxis(event,
+            MotionEvent.AXIS_GESTURE_SCROLL_X_DISTANCE, 0, historyPos);
+        float gestureY = capturedAxis(event,
+            MotionEvent.AXIS_GESTURE_SCROLL_Y_DISTANCE, 0, historyPos);
+        if (gestureY != 0f)
+            Native.nativeSendMouseScroll(0, gestureY);
+        if (gestureX != 0f)
+            Native.nativeSendMouseScroll(1, -gestureX);
+    }
+
+    private boolean hasCapturedTouchpadScrollAxes(MotionEvent event) {
+        if (event.getPointerCount() <= 0)
+            return false;
+        for (int i = 0; i < event.getHistorySize(); i++) {
+            if (hasCapturedScrollAxesAt(event, i))
+                return true;
+        }
+        return hasCapturedScrollAxesAt(event, -1);
+    }
+
+    private boolean hasCapturedScrollAxesAt(MotionEvent event, int historyPos) {
+        return capturedAxis(event, MotionEvent.AXIS_VSCROLL, 0, historyPos) != 0f
+            || capturedAxis(event, MotionEvent.AXIS_HSCROLL, 0, historyPos) != 0f
+            || capturedAxis(event, MotionEvent.AXIS_GESTURE_SCROLL_X_DISTANCE,
+                0, historyPos) != 0f
+            || capturedAxis(event, MotionEvent.AXIS_GESTURE_SCROLL_Y_DISTANCE,
+                0, historyPos) != 0f;
+    }
+
+    private float capturedAxis(
+            MotionEvent event, int axis, int pointerIndex, int historyPos) {
+        return historyPos >= 0
+            ? event.getHistoricalAxisValue(axis, pointerIndex, historyPos)
+            : event.getAxisValue(axis, pointerIndex);
+    }
+
+    private float capturedCoordinate(
+            MotionEvent event, boolean xAxis, int pointerIndex, int historyPos) {
+        if (historyPos >= 0) {
+            return xAxis
+                ? event.getHistoricalX(pointerIndex, historyPos)
+                : event.getHistoricalY(pointerIndex, historyPos);
+        }
+        return xAxis ? event.getX(pointerIndex) : event.getY(pointerIndex);
+    }
+
+    private float capturedTouchpadCentroid(
+            MotionEvent event, int historyPos, boolean xAxis) {
+        int pointerCount = event.getPointerCount();
+        if (pointerCount <= 0)
+            return 0f;
+        float total = 0f;
+        for (int i = 0; i < pointerCount; i++)
+            total += capturedCoordinate(event, xAxis, i, historyPos);
+        return total / pointerCount;
+    }
+
+    private void setCapturedTouchpadBaseline(MotionEvent event, int historyPos) {
+        mCapturedTouchpadLastCentroidX =
+            capturedTouchpadCentroid(event, historyPos, true);
+        mCapturedTouchpadLastCentroidY =
+            capturedTouchpadCentroid(event, historyPos, false);
+        mCapturedTouchpadBaselinePointers = event.getPointerCount();
+        mCapturedTouchpadBaselineValid = mCapturedTouchpadBaselinePointers > 0;
+    }
+
+    private void resetCapturedTouchpadGesture() {
+        if (mCapturedTouchpad != null)
+            mCapturedTouchpad.cancel();
+        mCapturedTouchpadDeviceId = -1;
+        mCapturedTouchpadBaselineValid = false;
+        mCapturedTouchpadBaselinePointers = 0;
+        mCapturedTouchpadLastCentroidX = 0f;
+        mCapturedTouchpadLastCentroidY = 0f;
+        mButtonDragLastX.clear();
+        mButtonDragLastY.clear();
+    }
+
+    private int capturedPointerViewWidth() {
+        return viewWidth > 0 ? viewWidth : surfaceView.getWidth();
+    }
+
+    private int capturedPointerViewHeight() {
+        return viewHeight > 0 ? viewHeight : surfaceView.getHeight();
+    }
+
+    private float capturedPointerScaleX() {
+        int width = capturedPointerViewWidth();
+        return customScreenWidth > 0 && width > 0
+            ? (float) customScreenWidth / width : 1f;
+    }
+
+    private float capturedPointerScaleY() {
+        int height = capturedPointerViewHeight();
+        return customScreenHeight > 0 && height > 0
+            ? (float) customScreenHeight / height : 1f;
+    }
+
+    private void ensureCapturedPointerPosition() {
+        int outputWidth = customScreenWidth > 0
+            ? customScreenWidth : capturedPointerViewWidth();
+        int outputHeight = customScreenHeight > 0
+            ? customScreenHeight : capturedPointerViewHeight();
+        if (!mPointerPositionKnown) {
+            mPointerX = Math.max(0, outputWidth) / 2f;
+            mPointerY = Math.max(0, outputHeight) / 2f;
+            mPointerPositionKnown = true;
+        }
+        mPointerX = clamp(mPointerX, 0f, Math.max(0, outputWidth));
+        mPointerY = clamp(mPointerY, 0f, Math.max(0, outputHeight));
+    }
+
+    private void moveCapturedPointerBy(float dx, float dy, int source) {
+        if (!Float.isFinite(dx) || !Float.isFinite(dy)
+                || (dx == 0f && dy == 0f))
+            return;
+        transformCapturedPointerDelta(dx, dy, source);
+        dx = mTransformedPointerDelta[0]
+            * mCapturedPointerSpeedFactor * mDensity * capturedPointerScaleX();
+        dy = mTransformedPointerDelta[1]
+            * mCapturedPointerSpeedFactor * mDensity * capturedPointerScaleY();
+
+        ensureCapturedPointerPosition();
+        int outputWidth = customScreenWidth > 0
+            ? customScreenWidth : capturedPointerViewWidth();
+        int outputHeight = customScreenHeight > 0
+            ? customScreenHeight : capturedPointerViewHeight();
+        mPointerX = clamp(mPointerX + dx, 0f, Math.max(0, outputWidth));
+        mPointerY = clamp(mPointerY + dy, 0f, Math.max(0, outputHeight));
+        Native.nativeSendMouseMotion(mPointerX, mPointerY, dx, dy);
     }
 
     private void transformCapturedPointerDelta(float x, float y, int source) {
@@ -1353,9 +1753,7 @@ public class MainActivity extends Activity
         mTransformedPointerDelta[1] = y;
     }
 
-    private void updateMouseButtons(MotionEvent event) {
-
-        int currentBS = event.getButtonState();
+    private void updateMouseButtonState(int currentBS) {
         for (int[] btn : BUTTON_MAP) {
             boolean wasDown = (savedBS & btn[0]) != 0;
             boolean isDown  = (currentBS & btn[0]) != 0;
@@ -1363,6 +1761,37 @@ public class MainActivity extends Activity
                 Native.nativeSendMouseButton(btn[1], isDown);
         }
         savedBS = currentBS;
+    }
+
+    private static int effectiveButtonState(MotionEvent event) {
+        int buttonState = event.getButtonState();
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_BUTTON_PRESS)
+            buttonState |= event.getActionButton();
+        else if (action == MotionEvent.ACTION_BUTTON_RELEASE)
+            buttonState &= ~event.getActionButton();
+        return buttonState;
+    }
+
+    private void updateMouseButtonStateFromEvent(MotionEvent event) {
+        updateMouseButtonState(effectiveButtonState(event));
+    }
+
+    private void updateMouseButtons(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL)
+            releaseAllMouseButtons();
+        else
+            updateMouseButtonStateFromEvent(event);
+    }
+
+    private void releaseAllMouseButtons() {
+        if (savedBS == 0)
+            return;
+        for (int[] btn : BUTTON_MAP) {
+            if ((savedBS & btn[0]) != 0)
+                Native.nativeSendMouseButton(btn[1], false);
+        }
+        savedBS = 0;
     }
 
     private static float clamp(float value, float min, float max) {
