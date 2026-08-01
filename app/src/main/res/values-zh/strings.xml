@@ -35,7 +35,7 @@
 
     <!-- Accessibility -->
     <string name="accessibility_switch">无障碍按键拦截</string>
-    <string name="accessibility_hint">通过无障碍服务拦截功能键（Fn、F1-F12 等）。如果外接键盘的 Fn 组合键无法传到桌面，请启用此项。需要在系统 设置 &gt; 无障碍 中授予无障碍权限（仅需一次）。</string>
+    <string name="accessibility_hint">通过无障碍服务拦截功能键（Fn、F1-F12 等），并将平板键盘上报的返回/浏览器后退键转换为 ESC。如果外接键盘的 Fn 组合键或 ESC 无法正确传到桌面，请启用此项。需要在系统 设置 &gt; 无障碍 中授予无障碍权限（仅需一次）。</string>
 
     <!-- Extra keys bar -->
     <string name="extra_keys_switch">扩展按键栏（特殊按键）</string>
@@ -63,6 +63,18 @@
     <string name="transform_captured_pointer_label">转换捕获的指针移动</string>
     <string name="captured_pointer_speed_label">捕获的指针速度系数，%</string>
     <string name="captured_pointer_speed_value">%1$d%%</string>
+    <string name="scroll_reverse_switch">反向捕获触摸板滚动</string>
+    <string name="scroll_reverse_hint">开启后内容跟随手指移动（“自然滚动”）。仅对捕获的硬件触摸板双指滚动生效。</string>
+    <string name="scroll_speed_label">双指滚动速度</string>
+    <string name="scroll_speed_value">%1$.2f</string>
+    <string name="threshold_factor_value">%1$.2f 倍触摸阈值</string>
+    <string name="scroll_threshold_label">滚动判定阈值</string>
+    <string name="scroll_threshold_hint">手指移动多远才算开始移动。如果双指开合被当成滚动，请调低此值。</string>
+    <string name="move_threshold_label">手势定性阈值</string>
+    <string name="move_threshold_hint">主导手指移动多远才对含糊的双指手势定性。如果滚动起步迟滞，请调低此值。</string>
+    <string name="gesture_scale_label">手势幅度</string>
+    <string name="gesture_scale_value">%1$.0f 像素</string>
+    <string name="gesture_scale_hint">转为触摸的手势（双指开合、三指及以上）会映射到以指针为中心、边长为此值的正方形内。值越大，相同手指移动产生的手势幅度越大。</string>
 
     <!-- Connection -->
     <string name="socket_path_label">守护进程套接字路径</string>
