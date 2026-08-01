@@ -72,6 +72,8 @@ public class MainActivity extends Activity
     private static final String KEY_EXTRA_KEYS_ENABLED = "extra_keys_bar";
     private static final String KEY_AUTO_SHOW_EXTRA_KEYS = "auto_show_extra_keys";
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
+    // Linux input-event-codes.h: KEY_BACK (the browser-back key).
+    private static final int EVDEV_BROWSER_BACK = 158;
     // When on, the IME and extra-keys bar float over the display instead of
     // shrinking it: the bar rides up with the keyboard but the surface keeps
     // its full size. See relayout() and buildExtraKeysBar().
@@ -1059,6 +1061,16 @@ public class MainActivity extends Activity
     // Called from KeyInterceptor (accessibility service) to handle keys that
     // the normal onKeyDown/onKeyUp might miss (e.g. Fn combos).
     public boolean handleAccessibilityKey(KeyEvent event) {
+        // Some tablet keyboard layouts expose their physical Esc key as
+        // Android Back (Linux KEY_BACK / Browser Back). Convert it only on
+        // the accessibility-interception path so the normal Android Back and
+        // configured user-action behaviour is unchanged when interception is off.
+        if (shouldConvertBackToEscape(event)) {
+            if (event.getRepeatCount() > 0)
+                return true;
+            return forwardKeyToLinux(event, true);
+        }
+
         Boolean actionHandled = handleConfiguredUserAction(event);
         if (actionHandled != null)
             return actionHandled;
@@ -1066,19 +1078,26 @@ public class MainActivity extends Activity
         if (event.getRepeatCount() > 0)
             return true;
 
-        boolean handled = forwardKeyToLinux(event);
+        boolean handled = forwardKeyToLinux(event, true);
         releasePointerCaptureOnEscape(event);
         return handled;
     }
 
     private boolean forwardKeyToLinux(KeyEvent event) {
+        return forwardKeyToLinux(event, false);
+    }
+
+    private boolean forwardKeyToLinux(KeyEvent event, boolean convertBackToEscape) {
         int keyCode = event.getKeyCode();
         int action = event.getAction() == KeyEvent.ACTION_DOWN ? 0 : 1;
         int evdev = -1;
 
+        if (convertBackToEscape && shouldConvertBackToEscape(event))
+            evdev = KeyCodeMapper.getScanCode(KeyEvent.KEYCODE_ESCAPE);
+
         // Reserved Android keys may carry vendor scan codes that Linux does not
         // recognize, so prefer their explicit evdev mapping.
-        if (shouldPreferMappedKey(keyCode))
+        if (evdev == -1 && shouldPreferMappedKey(keyCode))
             evdev = KeyCodeMapper.getScanCode(keyCode);
 
         if (evdev == -1 && event.getScanCode() != 0)
@@ -1092,6 +1111,11 @@ public class MainActivity extends Activity
 
         Native.nativeSendKey(action, evdev);
         return true;
+    }
+
+    private static boolean shouldConvertBackToEscape(KeyEvent event) {
+        return event.getKeyCode() == KeyEvent.KEYCODE_BACK
+                || event.getScanCode() == EVDEV_BROWSER_BACK;
     }
 
     private static boolean shouldPreferMappedKey(int keyCode) {
