@@ -63,6 +63,18 @@
     <string name="transform_captured_pointer_label">轉換擷取的指標移動</string>
     <string name="captured_pointer_speed_label">擷取的指標速度係數，%</string>
     <string name="captured_pointer_speed_value">%1$d%%</string>
+    <string name="scroll_reverse_switch">反轉擷取觸控板的捲動方向</string>
+    <string name="scroll_reverse_hint">開啟後內容會跟隨手指移動（「自然捲動」）。僅套用於已擷取硬體觸控板的雙指捲動。</string>
+    <string name="scroll_speed_label">雙指捲動速度</string>
+    <string name="scroll_speed_value">%1$.2f</string>
+    <string name="threshold_factor_value">%1$.2f 倍觸控閾值</string>
+    <string name="scroll_threshold_label">捲動判定閾值</string>
+    <string name="scroll_threshold_hint">手指必須移動多遠才視為開始移動。如果雙指縮放被判定為捲動，請降低此值。</string>
+    <string name="move_threshold_label">手勢判定閾值</string>
+    <string name="move_threshold_hint">主導手指必須移動多遠才會判定含糊的雙指手勢。如果捲動啟動遲滯，請降低此值。</string>
+    <string name="gesture_scale_label">手勢幅度</string>
+    <string name="gesture_scale_value">%1$.0f 像素</string>
+    <string name="gesture_scale_hint">轉為觸控的手勢（雙指縮放、三指及以上）會對應到以指標為中心、邊長為此值的正方形內。值越大，相同手指移動產生的手勢幅度越大。</string>
 
     <!-- Connection -->
     <string name="socket_path_label">守護程序 socket 路徑</string>

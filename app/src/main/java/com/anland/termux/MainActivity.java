@@ -90,6 +90,11 @@ public class MainActivity extends Activity
     private static final String KEY_POINTER_CAPTURE = "pointer_capture";
     private static final String KEY_TRANSFORM_CAPTURED_POINTER = "transform_captured_pointer";
     private static final String KEY_CAPTURED_POINTER_SPEED_FACTOR = "captured_pointer_speed_factor";
+    private static final String KEY_SCROLL_SPEED = "scroll_speed";
+    private static final String KEY_SCROLL_REVERSE = "scroll_reverse";
+    private static final String KEY_SCROLL_THRESHOLD = "touchpad_scroll_threshold";
+    private static final String KEY_MOVE_THRESHOLD = "touchpad_move_threshold";
+    private static final String KEY_GESTURE_SCALE = "touchpad_gesture_scale";
     // System soft-keyboard bridge: hidden input, text forwarding and toggle.
     private SystemIME systemIme;
     private int mImeBottom = 0;   // last IME bottom inset
@@ -1287,6 +1292,17 @@ public class MainActivity extends Activity
             mCapturedPointerTransform = "no";
         int speedPercent = prefs.getInt(KEY_CAPTURED_POINTER_SPEED_FACTOR, 100);
         mCapturedPointerSpeedFactor = Math.max(1, Math.min(300, speedPercent)) / 100f;
+        mCapturedTouchpad.setScrollSpeed(prefs.getFloat(
+            KEY_SCROLL_SPEED, Touchpad.DEFAULT_SCROLL_SPEED));
+        mCapturedTouchpad.setScrollReversed(
+            prefs.getBoolean(KEY_SCROLL_REVERSE, false));
+        mCapturedTouchpad.setGestureThresholds(
+            prefs.getFloat(KEY_SCROLL_THRESHOLD,
+                Touchpad.DEFAULT_SCROLL_THRESHOLD_FACTOR),
+            prefs.getFloat(KEY_MOVE_THRESHOLD,
+                Touchpad.DEFAULT_MOVE_THRESHOLD_FACTOR));
+        mCapturedTouchpad.setGestureScale(prefs.getFloat(
+            KEY_GESTURE_SCALE, Touchpad.DEFAULT_GESTURE_SCALE));
 
         if (!mPointerCaptureEnabled && surfaceView.hasPointerCapture())
             surfaceView.releasePointerCapture();

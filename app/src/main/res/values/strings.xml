@@ -63,6 +63,18 @@
     <string name="transform_captured_pointer_label">Transform captured pointer movements</string>
     <string name="captured_pointer_speed_label">Captured pointer speed factor, %</string>
     <string name="captured_pointer_speed_value">%1$d%%</string>
+    <string name="scroll_reverse_switch">Reverse captured touchpad scrolling</string>
+    <string name="scroll_reverse_hint">ON: content follows your fingers ("natural" scrolling). Applies to two-finger scrolling on captured hardware touchpads.</string>
+    <string name="scroll_speed_label">Two-finger scroll speed</string>
+    <string name="scroll_speed_value">%1$.2f</string>
+    <string name="threshold_factor_value">%1$.2f× touch slop</string>
+    <string name="scroll_threshold_label">Scroll detection threshold</string>
+    <string name="scroll_threshold_hint">How far a finger must travel before it counts as moving. Lower this if a pinch is being treated as a scroll.</string>
+    <string name="move_threshold_label">Gesture commit threshold</string>
+    <string name="move_threshold_hint">How far the leading finger must travel before an ambiguous two-finger gesture is resolved. Lower this if scrolling is slow to engage.</string>
+    <string name="gesture_scale_label">Gesture magnitude</string>
+    <string name="gesture_scale_value">%1$.0f px</string>
+    <string name="gesture_scale_hint">Gestures forwarded as touch (pinch, three or more fingers) are mapped into a square of this size centred on the pointer. Larger values make the same finger movement travel further.</string>
 
     <!-- Connection -->
     <string name="socket_path_label">Daemon socket path</string>
