@@ -97,7 +97,7 @@
     <string name="screen_orientation_hint">控制桌面檢視的螢幕方向。返回桌面時生效。</string>
     <string name="display_cutout_mode_label">螢幕缺角處理</string>
     <string name="pip_mode_switch">子母畫面模式</string>
-    <string name="pip_mode_hint">按下主畫面鍵或最近使用的應用程式鍵時，以子母畫面模式顯示應用程式。</string>
+    <string name="pip_mode_hint">按下主畫面鍵或最近使用的應用程式鍵時，以子母畫面模式顯示應用程式。請謹慎開啟，因為它可能會出現奇數的螢幕寬度或高度，導致桌面黑屏或當機。</string>
 
     <!-- Settings notification -->
     <string name="notification_switch">顯示設定通知</string>

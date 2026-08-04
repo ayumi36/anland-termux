@@ -97,7 +97,7 @@
     <string name="screen_orientation_hint">Controls the desktop view orientation. Takes effect when you return to the desktop.</string>
     <string name="display_cutout_mode_label">Display cutout handling</string>
     <string name="pip_mode_switch">PIP mode</string>
-    <string name="pip_mode_hint">Show the app in picture-in-picture mode when the Home or Recents button is pressed.</string>
+    <string name="pip_mode_hint">Show the app in picture-in-picture mode when the Home or Recents button is pressed. Enable with caution. It may result in an odd screen width or height, causing the desktop to show a black screen or crash.</string>
 
     <!-- Settings notification -->
     <string name="notification_switch">Show settings notification</string>

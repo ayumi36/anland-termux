@@ -97,7 +97,7 @@
     <string name="screen_orientation_hint">控制桌面视图的屏幕方向。返回桌面时生效。</string>
     <string name="display_cutout_mode_label">屏幕缺角处理</string>
     <string name="pip_mode_switch">画中画模式</string>
-    <string name="pip_mode_hint">按下主屏幕键或最近任务键时，以画中画模式显示应用。</string>
+    <string name="pip_mode_hint">按下主屏幕键或最近任务键时，以画中画模式显示应用。请谨慎开启，因为它可能会出现奇数的屏幕宽度或高度，导致桌面黑屏或崩溃。</string>
 
     <!-- Settings notification -->
     <string name="notification_switch">显示设置通知</string>
