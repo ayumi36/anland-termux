@@ -109,6 +109,7 @@ public class MainActivity extends Activity
     private float mPointerY = 0f;
     private boolean mPointerPositionKnown = false;
     private final float[] mTransformedPointerDelta = new float[2];
+    private final int[] mSurfaceLocationInWindow = new int[2];
     private Touchpad mCapturedTouchpad;
     private int mCapturedTouchpadDeviceId = -1;
     private boolean mCapturedTouchpadBaselineValid = false;
@@ -1011,9 +1012,6 @@ public class MainActivity extends Activity
         syncExtraKeysBarWithIme(visible);
     }
 
-    // ================================================================
-    // 原有 onTouchEvent 仅在最前面插入了一个分支判断，其余原封不动
-    // ================================================================
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN && !surfaceView.isFocused())
@@ -1021,21 +1019,30 @@ public class MainActivity extends Activity
         if (event.getActionMasked() == MotionEvent.ACTION_UP && mPointerCaptureEnabled)
             surfaceView.requestPointerCapture();
 
-        // ===== 触摸板模式优先处理（仅针对非鼠标触摸事件） =====
-        if (isTouchpadMode && !isMouseEvent(event)) {
-            return virtualTouchpad.onTouch(event);
-        }
+        // Activity events use window coordinates, while producer input starts
+        // at the SurfaceView origin. Display-safe padding can move that origin.
+        surfaceView.getLocationInWindow(mSurfaceLocationInWindow);
+        float offsetX = mSurfaceLocationInWindow[0];
+        float offsetY = mSurfaceLocationInWindow[1];
+        event.offsetLocation(-offsetX, -offsetY);
+        try {
+            // ===== 触摸板模式优先处理（仅针对非鼠标触摸事件） =====
+            if (isTouchpadMode && !isMouseEvent(event)) {
+                return virtualTouchpad.onTouch(event);
+            }
 
-        // 以下为原有代码，一字未改
-        if (isMouseEvent(event)) {
-            int cls = event.getClassification();
-            if (cls == CLASSIFICATION_TWO_FINGER_SWIPE)
-                return handleTouchpadScroll(event);
-            if (cls == CLASSIFICATION_MULTI_FINGER_SWIPE || cls == CLASSIFICATION_PINCH)
-                return handleTouchEvent(event);
-            return handleMouseEvent(event);
+            if (isMouseEvent(event)) {
+                int cls = event.getClassification();
+                if (cls == CLASSIFICATION_TWO_FINGER_SWIPE)
+                    return handleTouchpadScroll(event);
+                if (cls == CLASSIFICATION_MULTI_FINGER_SWIPE || cls == CLASSIFICATION_PINCH)
+                    return handleTouchEvent(event);
+                return handleMouseEvent(event);
+            }
+            return handleTouchEvent(event);
+        } finally {
+            event.offsetLocation(offsetX, offsetY);
         }
-        return handleTouchEvent(event);
     }
 
     @Override
@@ -1043,6 +1050,9 @@ public class MainActivity extends Activity
         if (isMouseEvent(event)) {
             int action = event.getActionMasked();
             if (action == MotionEvent.ACTION_HOVER_MOVE) {
+                surfaceView.getLocationInWindow(mSurfaceLocationInWindow);
+                float surfaceX = event.getX() - mSurfaceLocationInWindow[0];
+                float surfaceY = event.getY() - mSurfaceLocationInWindow[1];
 
                 // Масштабирование
                 float scaleX = (customScreenWidth > 0 && viewWidth > 0) ?
@@ -1050,11 +1060,11 @@ public class MainActivity extends Activity
                 float scaleY = (customScreenHeight > 0 && viewHeight > 0) ?
                         (float)customScreenHeight / viewHeight : 1.0f;
 
-                Native.nativeSendMouseMotion(event.getX()*scaleX, event.getY()*scaleY,
+                Native.nativeSendMouseMotion(surfaceX * scaleX, surfaceY * scaleY,
                                       event.getAxisValue(MotionEvent.AXIS_RELATIVE_X),
                                       event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y));
-                mPointerX = event.getX() * scaleX;
-                mPointerY = event.getY() * scaleY;
+                mPointerX = surfaceX * scaleX;
+                mPointerY = surfaceY * scaleY;
                 mPointerPositionKnown = true;
                 return true;
             }
