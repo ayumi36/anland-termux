@@ -14,6 +14,7 @@ ANLAND_AUDIO_DEBUG=${ANLAND_AUDIO_DEBUG:-0}
 ANLAND_HAVE_KGSL=0
 ANLAND_PRIVATE_SYSTEM_BUS_PID=
 ANLAND_PRIVATE_SYSTEM_BUS_SOCKET=
+ANLAND_GNOME_SESSION_PID=
 SCRIPT_PATH=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 if [[ -r /dev/kgsl-3d0 ]]; then
@@ -173,6 +174,31 @@ set_common_environment() {
     export XDG_SESSION_TYPE=wayland
     export GNOME_SHELL_SESSION_MODE=gnome
     export WAYLAND_DISPLAY="$GNOME_WAYLAND_DISPLAY"
+}
+
+prepare_ptyxis_systemd_run_shim() {
+    local shim_dir="$XDG_RUNTIME_DIR/anland-ptyxis"
+    local systemd_run
+
+    # Ptyxis only probes systemd-run's version before using --user --scope.
+    # A Chroot can provide that binary without a running user manager.
+    [[ -S $XDG_RUNTIME_DIR/systemd/private ]] && return 0
+
+    systemd_run=$(command -v systemd-run || true)
+    [[ -n $systemd_run && -x $systemd_run ]] || return 0
+
+    install -d -m 0700 "$shim_dir"
+    # shellcheck disable=SC2016
+    printf '%s\n' \
+        '#!/bin/sh' \
+        'if [ "${1:-}" = "--version" ] &&' \
+        '    [ "$(cat "/proc/$PPID/comm" 2>/dev/null || true)" = "ptyxis-agent" ]; then' \
+        '    exit 1' \
+        'fi' \
+        "exec \"$systemd_run\" \"\$@\"" \
+        > "$shim_dir/systemd-run"
+    chmod 0700 "$shim_dir/systemd-run"
+    export PATH="$shim_dir:$PATH"
 }
 
 enable_kgsl() {
@@ -345,6 +371,7 @@ stop_gnome() {
     pkill -x -u "$user_id" gnome-shell > /dev/null 2>&1 || true
     pkill -x -u "$user_id" gnome-session > /dev/null 2>&1 || true
     pkill -x -u "$user_id" gnome-session-b > /dev/null 2>&1 || true
+    pkill -x -u "$user_id" gnome-session-service > /dev/null 2>&1 || true
 
     while pgrep -x -u "$user_id" gnome-shell > /dev/null 2>&1 &&
         [[ $attempts -gt 0 ]]; do
@@ -451,6 +478,66 @@ system_bus_is_available() {
     fi
 }
 
+session_systemd_is_available() {
+    if command -v gdbus > /dev/null 2>&1; then
+        gdbus call --session \
+            --timeout 2 \
+            --dest org.freedesktop.DBus \
+            --object-path /org/freedesktop/DBus \
+            --method org.freedesktop.DBus.GetNameOwner \
+            org.freedesktop.systemd1 \
+            > /dev/null 2>&1
+    elif command -v dbus-send > /dev/null 2>&1; then
+        dbus-send --session --print-reply --reply-timeout=2000 \
+            --dest=org.freedesktop.DBus \
+            /org/freedesktop/DBus \
+            org.freedesktop.DBus.GetNameOwner \
+            string:org.freedesktop.systemd1 \
+            > /dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
+session_manager_initialized() {
+    if command -v gdbus > /dev/null 2>&1; then
+        gdbus call --session \
+            --timeout 1 \
+            --dest org.gnome.SessionManager \
+            --object-path /org/gnome/SessionManager \
+            --method org.gnome.SessionManager.Initialized \
+            > /dev/null 2>&1
+    elif command -v dbus-send > /dev/null 2>&1; then
+        dbus-send --session --print-reply --reply-timeout=1000 \
+            --dest=org.gnome.SessionManager \
+            /org/gnome/SessionManager \
+            org.gnome.SessionManager.Initialized \
+            > /dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
+find_gnome_session_service() {
+    local candidate
+
+    if command -v gnome-session-service > /dev/null 2>&1; then
+        command -v gnome-session-service
+        return 0
+    fi
+
+    for candidate in \
+        /usr/libexec/gnome-session-service \
+        /usr/lib/gnome-session/gnome-session-service; do
+        if [[ -x $candidate ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 ensure_system_bus() {
     local attempts=20
     local bus_log_dir=${ANLAND_LOG_DIR:-$XDG_RUNTIME_DIR/anland-logs}
@@ -535,21 +622,49 @@ stop_private_system_bus() {
     ANLAND_PRIVATE_SYSTEM_BUS_SOCKET=
 }
 
+stop_gnome_session_service() {
+    local attempts=20
+    local session_pid=$ANLAND_GNOME_SESSION_PID
+
+    if [[ -n $session_pid ]] &&
+        kill -0 "$session_pid" > /dev/null 2>&1; then
+        kill "$session_pid" > /dev/null 2>&1 || true
+        while kill -0 "$session_pid" > /dev/null 2>&1 &&
+            [[ $attempts -gt 0 ]]; do
+            sleep 0.1
+            attempts=$((attempts - 1))
+        done
+        if kill -0 "$session_pid" > /dev/null 2>&1; then
+            kill -KILL "$session_pid" > /dev/null 2>&1 || true
+        fi
+        wait "$session_pid" > /dev/null 2>&1 || true
+    fi
+
+    ANLAND_GNOME_SESSION_PID=
+}
+
 cleanup_gnome_session() {
+    stop_gnome_session_service
     stop_audio_services
     stop_private_system_bus
 }
 
 prepare_gnome_session_definition() {
+    local standalone_service=${1:-0}
     local runtime_data_dir="$XDG_RUNTIME_DIR/anland-gnome-session/share"
     local runtime_config_dir="$XDG_RUNTIME_DIR/anland-gnome-session/config"
     local session_source
     local desktop_script_path=${SCRIPT_PATH//\\/\\\\}
+    local shell_phase='X-GNOME-Autostart-Phase=DisplayServer'
     local -a session_filters=(
         -e 's/org\.gnome\.Shell/org.gnome.Shell.Anland/g'
     )
 
     desktop_script_path=${desktop_script_path//\"/\\\"}
+    if [[ $standalone_service -eq 1 ]]; then
+        shell_phase='X-GNOME-Autostart-Phase=Application'
+    fi
+
     if ! session_source=$(find_gnome_session_file); then
         return 1
     fi
@@ -571,7 +686,7 @@ prepare_gnome_session_definition() {
         'Type=Application' \
         'Name=GNOME Shell on Anland' \
         "Exec=\"$desktop_script_path\" --gnome-shell-session" \
-        'X-GNOME-Autostart-Phase=DisplayServer' \
+        "$shell_phase" \
         'X-GNOME-Provides=windowmanager' \
         'X-GNOME-Autostart-Notify=true' \
         'NoDisplay=true' \
@@ -613,7 +728,56 @@ run_gnome_shell() {
     fi
 }
 
+run_gnome_session_service() {
+    local service_path=$1
+    local log_dir=${ANLAND_LOG_DIR:-$XDG_RUNTIME_DIR/anland-logs}
+    local attempts=100
+
+    if ! command -v gdbus > /dev/null 2>&1 &&
+        ! command -v dbus-send > /dev/null 2>&1; then
+        print_warning "Neither gdbus nor dbus-send is available; cannot initialize the GNOME session service."
+        return 1
+    fi
+
+    mkdir -p "$log_dir"
+    if [[ $ANLAND_GNOME_DEBUG -eq 1 ]]; then
+        GNOME_SESSION_DEBUG=1 "$service_path" --session=anland &
+    else
+        "$service_path" --session=anland \
+            > "$log_dir/gnome-session-service.log" 2>&1 &
+    fi
+    ANLAND_GNOME_SESSION_PID=$!
+
+    while [[ $attempts -gt 0 ]]; do
+        if session_manager_initialized; then
+            wait "$ANLAND_GNOME_SESSION_PID" > /dev/null 2>&1 || true
+            ANLAND_GNOME_SESSION_PID=
+            return 0
+        fi
+
+        if ! kill -0 "$ANLAND_GNOME_SESSION_PID" > /dev/null 2>&1; then
+            wait "$ANLAND_GNOME_SESSION_PID" > /dev/null 2>&1 || true
+            ANLAND_GNOME_SESSION_PID=
+            return 1
+        fi
+
+        sleep 0.1
+        attempts=$((attempts - 1))
+    done
+
+    if [[ $ANLAND_GNOME_DEBUG -eq 1 ]]; then
+        print_warning "The GNOME session service did not become ready."
+    else
+        print_warning "The GNOME session service did not become ready; see $log_dir/gnome-session-service.log."
+    fi
+    stop_gnome_session_service
+    return 1
+}
+
 run_gnome_session() {
+    local session_service
+    local standalone_service=0
+
     trap cleanup_gnome_session EXIT
 
     if ! ensure_system_bus; then
@@ -623,13 +787,30 @@ run_gnome_session() {
 
     start_audio_services
 
-    if ! command -v gnome-session > /dev/null 2>&1; then
-        print_warning "gnome-session is unavailable; starting GNOME Shell without the remaining session components."
-    elif ! prepare_gnome_session_definition; then
+    if ! session_systemd_is_available; then
+        session_service=$(find_gnome_session_service || true)
+        if [[ -n $session_service ]]; then
+            standalone_service=1
+        fi
+    fi
+
+    if ! prepare_gnome_session_definition "$standalone_service"; then
         print_warning "A GNOME session definition is unavailable; starting GNOME Shell without the remaining gnome-session components."
-    else
+    elif [[ $standalone_service -eq 0 ]] && command -v gnome-session > /dev/null 2>&1; then
         gnome-session --session=anland
         return
+    elif [[ $standalone_service -eq 1 ]]; then
+        print_warning "The GNOME session systemd service is unavailable; using the standalone GNOME session service."
+        if run_gnome_session_service "$session_service"; then
+            return
+        fi
+        print_warning "The standalone GNOME session service failed; starting GNOME Shell directly."
+    elif command -v gnome-session > /dev/null 2>&1; then
+        print_warning "The standalone GNOME session service is unavailable; trying gnome-session directly."
+        gnome-session --session=anland
+        return
+    else
+        print_warning "gnome-session is unavailable; starting GNOME Shell without the remaining session components."
     fi
 
     run_gnome_shell 0
@@ -653,6 +834,7 @@ start_gnome() {
     fi
 
     set_common_environment
+    prepare_ptyxis_systemd_run_shim
     if [[ $ANLAND_HAVE_KGSL -eq 1 ]]; then
         enable_kgsl
     fi
