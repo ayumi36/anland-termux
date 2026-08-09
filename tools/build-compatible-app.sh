@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$ROOT_DIR/out"
 VERSION_NAME="$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=/ { print $2; exit }' "$ROOT_DIR/app/build.gradle")"
-APK_NAME="AnlandTermux-${VERSION_NAME}.apk"
+APK_NAME="AnlandTermux-${VERSION_NAME}-compatible.apk"
 
 if [[ -z "$VERSION_NAME" ]]; then
   echo "Could not read versionName from app/build.gradle" >&2
@@ -24,11 +24,11 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-(cd "$ROOT_DIR/app" && gradle --no-daemon assembleStandardDebug)
+(cd "$ROOT_DIR/app" && gradle --no-daemon assembleCompatibleDebug)
 
-mapfile -t DEBUG_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/standard/debug" -maxdepth 1 -type f -name "*.apk" | sort)
+mapfile -t DEBUG_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/compatible/debug" -maxdepth 1 -type f -name "*.apk" | sort)
 if [[ "${#DEBUG_APKS[@]}" -ne 1 ]]; then
-  echo "Expected exactly one debug APK, found ${#DEBUG_APKS[@]}:" >&2
+  echo "Expected exactly one compatible debug APK, found ${#DEBUG_APKS[@]}:" >&2
   printf '  %s\n' "${DEBUG_APKS[@]}" >&2
   exit 1
 fi

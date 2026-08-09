@@ -6,6 +6,10 @@ on:
       - termux
     paths:
       - "app/**"
+      - "packages/anland/**"
+      - "termux/**"
+      - "tools/**"
+      - ".github/workflows/build-anland-apk.yml"
   workflow_dispatch:
     inputs:
       ref:
@@ -99,16 +103,35 @@ jobs:
         run: |
           set -euo pipefail
           tools/build-app.sh
+          tools/build-compatible-app.sh
 
-      - name: Calculate checksums
+      - name: Calculate checksums for compatible APK
         shell: bash
         run: |
           set -euo pipefail
           cd out
+          sha256sum *compatible.apk | sort -k2 > sha256sums.txt
+          cat sha256sums.txt
+
+      - name: Upload compatible APK artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: anland-termux-apk-${{ github.run_id }}-${{ github.run_attempt }}-compatible
+          path: |
+            out/*compatible.apk
+            out/sha256sums.txt
+          retention-days: 90
+
+      - name: Calculate checksums for standard APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd out
+          rm -f *compatible.apk sha256sums.txt
           sha256sum *.apk | sort -k2 > sha256sums.txt
           cat sha256sums.txt
 
-      - name: Upload APK artifacts
+      - name: Upload standard APK artifacts
         uses: actions/upload-artifact@v7
         with:
           name: anland-termux-apk-${{ github.run_id }}-${{ github.run_attempt }}
