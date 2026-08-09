@@ -26,6 +26,7 @@ RUN set -eux; \
         mesa-libgallium \
         mesa-vulkan-drivers \
         pipewire-audio \
+        pipewire-libcamera \
         procps \
         sudo \
         unzip \
@@ -42,7 +43,7 @@ RUN set -eux; \
     curl --fail --location --show-error --output /tmp/mesa.tar.gz "${MESA_URL}"; \
     tar -zxvf /tmp/mesa.tar.gz -C /; \
     printf '%s\n' \
-        'Package: xwayland kwin-common kwin-data kwin-wayland libkwin6 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers weston libweston-*' \
+        'Package: xwayland libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers weston libweston-*' \
         'Pin: release *' \
         'Pin-Priority: -1' \
         > /etc/apt/preferences.d/hold-anland-package; \
