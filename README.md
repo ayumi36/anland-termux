@@ -28,6 +28,11 @@ Use [Anland](https://github.com/superturtlee/anland) in Termux, including **Term
 * Other processors, such as MediaTek Dimensity, Google Tensor, and Samsung Exynos, can currently use only software rendering (LLVMpipe) and may not be able to enter the Wayland desktop. So far, only the Google Tensor G1 has been tested by me; it can successfully enter the desktop in PRoot or Chroot containers. For other processors, you can also follow the instructions in the User Guide to have a try.
   **It would be helpful to share how this project works on your device in [Issues](https://github.com/lfdevs/anland-termux/issues).**
 
+### Termux sources and variants
+
+* If Termux comes from the [official GitHub repository](https://github.com/termux/termux-app/releases), use `AnlandTermux-<version>.apk`. It uses `sharedUserId` and runs as part of Termux, so Android always treats them as the same app without reducing performance.
+* If Termux comes from [F-Droid](https://f-droid.org/packages/com.termux/) or a variant such as ZeroTermux, use `AnlandTermux-<version>-compatible.apk` instead. It does not use `sharedUserId`; a Termux-side `anland-compatible` bridge holds the daemon socket and transfers its fd through Binder. See the [user guide](docs/user-guide.md) for details.
+
 ## User Guide
 
 For instructions on installing and using Anland: Termux, see [Anland: Termux User Guide](docs/user-guide.md).

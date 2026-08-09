@@ -12,8 +12,10 @@ Based on Anland, this project connects the Android display client, the Termux da
   - The Java layer handles interactions including activities, settings, input, clipboard, camera, and audio.
   - `app/src/main/jni/` contains native code for Surface, dma-buf, Unix sockets, and the JNI bridge.
   - Its package name is `com.anland.termux` and its app name is `Anland Termux`.
-  - It uses the shared UID `com.termux` and is signed with `app/testkey_untrusted.jks` for compatibility with the GitHub version of Termux.
+  - The `standard` flavor uses the shared UID `com.termux` and is signed with `app/testkey_untrusted.jks` for the GitHub version of Termux.
+  - The `compatible` flavor omits `sharedUserId`, keeps the same application ID, versionCode, and signing key, and appends `-compatible` to versionName.
 - `termux/anland/`: the `anland` daemon on the Termux side, which relays control messages and file descriptors between the Android display client and the Wayland producer. Its default socket is `$TMPDIR/anland/display_daemon.sock`; if `TMPDIR` is unset, it falls back to `/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock`.
+- `termux/anland/anland-compatible`: Termux-side launcher for the compatible APK. It resolves the installed APK and starts `CompatibleBridge` with `app_process`.
 - `packages/anland/`: draft Termux Packages recipe for building the daemon as a Termux package.
 - `scripts/`: Helper startup scripts for KDE Plasma and Weston in the Termux native environment and PRoot, Chroot, and LXC containers.
 - `images/`: ARM64 PRoot container image definitions for Debian 13 and Ubuntu 26.04. `images/packages.json` records download URLs for KWin, Weston, XWayland, and Mesa build artifacts.
@@ -21,6 +23,43 @@ Based on Anland, this project connects the Android display client, the Termux da
 - `.github/workflows/`: GitHub Actions workflows for APKs, Debian packages, and container images.
 - `docs/`: English and Chinese user and developer documentation; Chinese files use the `_zh.md` suffix.
 - `out/`: local build output directory for APKs and the daemon; do not commit it to Git.
+
+## Transports
+
+### Standard Transport
+
+The standard APK relies on Android's shared-UID mechanism and is intended for the GitHub release of Termux:
+
+1. The `standard` flavor manifest declares `android:sharedUserId="com.termux"` and is signed with `app/testkey_untrusted.jks`. During installation, Android verifies that its signature matches the installed Termux package; when it does, both apps run under the same Linux UID.
+2. The `anland` daemon listens on `display_daemon.sock` as the Termux UID. Because the standard APK runs with that UID too, its display client can access the Unix socket without cross-UID socket permissions or an extra bridge process.
+3. After `MainActivity` configures the default or user-selected socket path, the native consumer calls `connect_to_deamon()` outside compatible mode. That function calls `connect_unix()` to connect directly to the daemon. This path neither starts `anland-compatible` nor uses Binder.
+4. Once the control connection is established, the native display context sends the consumer hello and its display-side file descriptors. The daemon registers it as the consumer, then relays screen information and required file descriptors when the Wayland producer connects.
+
+This transport depends on the Termux and standard APK signatures matching. F-Droid Termux and variants signed with a different key cannot meet that condition, so Android rejects installation or updates of the standard APK; use the compatible APK in those environments. With the standard APK, start only the `anland` daemon, not `anland-compatible`.
+
+### Compatible Transport
+
+The compatible APK follows the standalone Termux:X11 transport and does not need
+the F-Droid signing key:
+
+1. `anland-compatible` runs under the Termux UID and loads
+   `com.anland.termux.CompatibleBridge` from the installed APK with
+   `/system/bin/app_process`.
+2. `CompatibleBridge` connects to `display_daemon.sock` as the Termux UID,
+   keeps the connected `LocalSocket` open, and sends a package-targeted
+   broadcast containing an `ICompatibleBridge` Binder.
+3. `MainActivity` receives the Binder, calls `getConnection()`, and detaches the
+   returned `ParcelFileDescriptor`. `Native.nativeSetCompatibleFd()` gives the
+   duplicate fd to `connect_to_deamon_with_fd()`.
+4. The native display context owns that fd for its lifetime. Its existing
+   fallback protocol can redeposit fresh data/fence/audio fds over the same
+   control connection, so no Android-side Unix `connect()` is needed.
+
+The user starts `anland-compatible [SOCKET_PATH]` from Termux, just as the
+standalone Termux:X11 command starts its entry point. The bridge keeps running
+and republishes its package-targeted Binder so an Activity recreated later can
+obtain another duplicate fd; no F-Droid signing key or Termux plugin permission
+is involved.
 
 ## Debugging
 
@@ -150,11 +189,21 @@ Build script:
 tools/build-app.sh
 ```
 
-Build artifact:
+This builds the `standardDebug` flavor. The compatible flavor is built with:
+
+```sh
+tools/build-compatible-app.sh
+```
+
+Build artifacts:
 
 ```text
 out/AnlandTermux-<version>.apk
+out/AnlandTermux-<version>-compatible.apk
 ```
+
+Both flavors use `app/testkey_untrusted.jks` and the same `versionCode`. The
+compatible flavor gets its `-compatible` versionName suffix from Gradle.
 
 ### Anland Daemon
 
@@ -169,6 +218,9 @@ When this is run inside Termux, the output is a Termux executable:
 ```text
 out/anland
 ```
+
+`make -C termux/anland install` and the package recipe also install the
+`anland-compatible` launcher required by the compatible APK.
 
 The draft Termux package recipe is located at:
 
@@ -270,7 +322,7 @@ Manual input:
 
 - `ref`: required Git reference to build; may be a branch, TAG, or commit. The default is `termux`.
 
-The build environment is fixed to JDK 21, Gradle 9.6.0, and Android NDK 29.0.14206865, and invokes `tools/build-app.sh`.
+The build environment is fixed to JDK 21, Gradle 9.6.0, and Android NDK 29.0.14206865, and invokes both `tools/build-app.sh` and `tools/build-compatible-app.sh`. Pull-request builds add `-debug-<short SHA>` before the compatible suffix, for example `AnlandTermux-5.13.2-debug-70d1b85-compatible.apk`.
 
 ### Build Docker Images
 

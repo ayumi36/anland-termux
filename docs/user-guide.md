@@ -8,10 +8,17 @@ This guide walks you through downloading, installing, and using [Anland: Termux]
 
 ## Prerequisites
 
-Before installing Anland: Termux, check that your installed Termux app comes from the [official GitHub releases](https://github.com/termux/termux-app/releases) **(not F-Droid or Google Play)**. This project supports only the Termux app from the official GitHub releases. To migrate Termux to the GitHub version, refer to the official backup and restore guide: <https://wiki.termux.com/wiki/Backing_up_Termux>
+Anland: Termux provides two display APKs. Choose the one that matches the installed Termux app:
+
+| Termux source | Display APK | Transport |
+| --- | --- | --- |
+| [Official GitHub releases](https://github.com/termux/termux-app/releases) | `AnlandTermux-<version>.apk` | Shared UID and direct Unix socket connection |
+| [F-Droid](https://f-droid.org/packages/com.termux/) or variants such as ZeroTermux | `AnlandTermux-<version>-compatible.apk` | Termux-side socket plus Binder fd transfer |
+
+The two APKs use the same application ID and versionCode, so they cannot be installed side by side. Uninstall the previous Anland Termux APK before switching transport variants.
 
 ```sh
-# Run this command in Termux; it should output 'GITHUB'
+# Run this command in Termux. Use the compatible APK when it reports F_DROID.
 echo $TERMUX_APP__APK_RELEASE
 ```
 
@@ -21,8 +28,9 @@ In the [latest release notes](https://github.com/lfdevs/anland-termux/releases/l
 
 | Item | Filename |
 | :---: | --- |
-| Android Display App | `AnlandTermux-5.13.1.apk` |
-| Termux Daemon | `anland_5.11.0-1_aarch64.deb` |
+| Android Display App (Standard) | `AnlandTermux-5.13.3.apk` |
+| Android Display App (Compatible) | `AnlandTermux-5.13.3-compatible.apk` |
+| Termux Daemon | `anland_5.13.3_aarch64.deb` |
 
 | | XWayland | KWin | Weston |
 | :---: | --- | --- | --- |
@@ -30,22 +38,20 @@ In the [latest release notes](https://github.com/lfdevs/anland-termux/releases/l
 | Ubuntu 26.04 | `xwayland_24.1.10-91_arm64.deb` | `kwin_anland-5.8-4_6.6.4-0ubuntu92.zip` | `weston_anland-5.13-ubuntu-14.0.2-92.zip` |
 | Debian 13 | `xwayland_24.1.6-91_arm64.deb` | `kwin_anland-5.8-debian-4_6.3.6-92.zip` | `weston_anland-5.13-debian-14.0.2-92.zip` |
 
-The Android Display App and Termux Daemon are required. Choose the XWayland, Weston, and KWin versions that match your runtime environment.
+The Android Display App and Termux Daemon are required. Choose the display APK according to the table above, then choose the XWayland, Weston, and KWin versions that match your runtime environment.
 
-For example, to run Anland: Termux with KDE Plasma in a Debian 13 PRoot container, download these four files: `AnlandTermux-5.13.1.apk`, `anland_5.11.0-1_aarch64.deb`, `xwayland_24.1.6-91_arm64.deb`, and `kwin_anland-5.8-debian-4_6.3.6-92.zip`.
+For example, to run Anland: Termux with KDE Plasma in a Debian 13 PRoot container using F-Droid Termux, download these four files: `AnlandTermux-5.13.3-compatible.apk`, `anland_5.13.3_aarch64.deb`, `xwayland_24.1.6-91_arm64.deb`, and `kwin_anland-5.8-debian-4_6.3.6-92.zip`.
 
-Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, download these four files: `AnlandTermux-5.13.1.apk`, `anland_5.11.0-1_aarch64.deb`, `xwayland_24.1.10-91_arm64.deb`, and `weston_anland-5.13-ubuntu-14.0.2-92.zip`.
+Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container using the GitHub Termux release, download these four files: `AnlandTermux-5.13.3.apk`, `anland_5.13.3_aarch64.deb`, `xwayland_24.1.10-91_arm64.deb`, and `weston_anland-5.13-ubuntu-14.0.2-92.zip`.
 
 ## Installation
 
-1. Install the display app on Android, such as `AnlandTermux-5.13.0.apk`.
+1. Install the display app on Android: use `AnlandTermux-5.13.3.apk` with GitHub Termux, or `AnlandTermux-5.13.3-compatible.apk` with F-Droid Termux. After installation, **long-press the app icon** to open its settings interface.
 
-   After installation, **long-press the app icon** to open its settings interface.
-
-2. Install the daemon in Termux, such as `anland_5.11.0-1_aarch64.deb`.
+2. Install the daemon in Termux, such as `anland_5.13.3_aarch64.deb`.
 
    ```sh
-   pkg reinstall ./anland_5.11.0-1_aarch64.deb
+   pkg reinstall ./anland_5.13.3_aarch64.deb
    ```
 
 > [!TIP]
@@ -66,8 +72,10 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
 > To use it, run the following commands. This starts KDE Plasma or Weston. Then switch to the “Anland Termux” app on Android. The `ANLAND_WESTON_SCALE` environment variable in the commands sets Weston’s scaling factor; set it to an integer that suits your needs.
 >
 > ```sh
-> killall anland > /dev/null 2>&1
-> anland > /dev/null 2>&1 &
+> # Start the daemon:
+> killall anland > /dev/null 2>&1; anland > /dev/null 2>&1 &
+> # The compatible APK also requires the Binder bridge:
+> pkill -TERM -x anland-compatible; anland-compatible &
 > # Debian 13 with KDE Plasma:
 > proot-distro login debian-anland --shared-tmp -- bash -c "startplasma-anland"
 > # Ubuntu 26.04 with KDE Plasma:
@@ -91,7 +99,7 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
    ```sh
    sudo apt reinstall ./xwayland_24.1.6-91_arm64.deb
    unzip kwin_anland-5.8-debian-4_6.3.6-92.zip -d kwin-debs-install/
-   sudo apt reinstall kwin-debs-install/*.deb
+   sudo apt reinstall ./kwin-debs-install/*.deb
    rm -rf kwin-debs-install/
    ```
 
@@ -100,7 +108,7 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
    ```sh
    sudo apt reinstall ./xwayland_24.1.10-91_arm64.deb
    unzip weston_anland-5.13-ubuntu-14.0.2-92.zip -d weston-debs-install/
-   sudo apt reinstall weston-debs-install/*.deb
+   sudo apt reinstall ./weston-debs-install/*.deb
    rm -rf weston-debs-install/
    ```
 
@@ -153,9 +161,12 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
 1. Start the daemon in Termux:
 
    ```sh
-   killall anland > /dev/null 2>&1
-   anland > /dev/null 2>&1 &
+   killall anland > /dev/null 2>&1; anland > /dev/null 2>&1 &
+   # The compatible APK also requires the Binder bridge:
+   pkill -TERM -x anland-compatible; anland-compatible &
    ```
+
+   For the compatible APK, keep `anland-compatible` running in Termux while the display app and daemon are in use.
 
 2. If your runtime environment is a Linux container, bind-mount Termux’s `$TMPDIR` to `/tmp` inside the container.
 
@@ -168,7 +179,7 @@ Or, to run Anland: Termux with Weston in an Ubuntu 26.04 Chroot container, downl
 3. After entering the runtime environment, download and run the following helper scripts.
 
 > [!TIP]
-> To ensure that audio services work correctly, make sure PipeWire is installed before running either script. For example, install the `pipewire` package in Termux or the `pipewire-audio` package in Debian/Ubuntu.
+> To ensure that audio services work correctly, make sure PipeWire is installed before running either script. For example, install the `pipewire` package in Termux or the `pipewire-audio` and `pipewire-libcamera` packages in Debian/Ubuntu.
 
    KDE Plasma: [startplasma-anland.sh](../scripts/startplasma-anland.sh)
 

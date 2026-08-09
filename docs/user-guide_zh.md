@@ -8,10 +8,17 @@
 
 ## 前提
 
-在安装 Anland: Termux 前，请先检查你现在安装的 Termux App 是否来自 [GitHub 的官方 Releases](https://github.com/termux/termux-app/releases)**（而非 F-Droid 或 Google Play）**。本项目仅支持与来自 GitHub 官方 Releases 的 Termux App 一同工作。如果你想将 Termux 迁移到 GitHub 版本，可以参考官方的备份与恢复指南：<https://wiki.termux.com/wiki/Backing_up_Termux>
+Anland: Termux 提供两种显示 APK，请按已安装的 Termux App 来源选择：
+
+| Termux 来源 | 显示 APK | 传输方式 |
+| --- | --- | --- |
+| [GitHub 官方 Releases](https://github.com/termux/termux-app/releases) | `AnlandTermux-<version>.apk` | Shared UID 和直接 Unix socket 连接 |
+| [F-Droid](https://f-droid.org/packages/com.termux/) 或 ZeroTermux 等变体 | `AnlandTermux-<version>-compatible.apk` | Termux 侧 socket 和 Binder fd 传递 |
+
+两种 APK 使用相同的 application ID 和 versionCode，不能同时安装。切换传输版本前请先卸载旧的 Anland Termux APK。
 
 ```sh
-# 在 Termux 运行这条命令，输出应为 'GITHUB'
+# 在 Termux 运行这条命令；输出为 F_DROID 时请选择 compatible APK。
 echo $TERMUX_APP__APK_RELEASE
 ```
 
@@ -21,8 +28,9 @@ echo $TERMUX_APP__APK_RELEASE
 
 | Item | Filename |
 | :---: | --- |
-| Android Display App | `AnlandTermux-5.13.1.apk` |
-| Termux Daemon | `anland_5.11.0-1_aarch64.deb` |
+| Android Display App (Standard) | `AnlandTermux-5.13.3.apk` |
+| Android Display App (Compatible) | `AnlandTermux-5.13.3-compatible.apk` |
+| Termux Daemon | `anland_5.13.3_aarch64.deb` |
 
 | | XWayland | KWin | Weston |
 | :---: | --- | --- | --- |
@@ -30,22 +38,20 @@ echo $TERMUX_APP__APK_RELEASE
 | Ubuntu 26.04 | `xwayland_24.1.10-91_arm64.deb` | `kwin_anland-5.8-4_6.6.4-0ubuntu92.zip` | `weston_anland-5.13-ubuntu-14.0.2-92.zip` |
 | Debian 13 | `xwayland_24.1.6-91_arm64.deb` | `kwin_anland-5.8-debian-4_6.3.6-92.zip` | `weston_anland-5.13-debian-14.0.2-92.zip` |
 
-“Android Display App”和“Termux Daemon”是必需的。“XWayland”、“Weston”和“KWin”和的版本请根据你的实际运行环境来进行选择。
+“Android Display App”和“Termux Daemon”是必需的。请先按上表选择显示 APK，再根据实际运行环境选择“XWayland”、“Weston”和“KWin”的版本。
 
-例如，在 Debian 13 的 PRoot 容器中运行 Anland: Termux，并使用 KDE Plasma，需要下载 `AnlandTermux-5.13.1.apk`、`anland_5.11.0-1_aarch64.deb`、`xwayland_24.1.6-91_arm64.deb` 和 `kwin_anland-5.8-debian-4_6.3.6-92.zip` 四个文件。
+例如，在 Debian 13 的 PRoot 容器中使用 F-Droid Termux 运行 Anland: Termux 和 KDE Plasma，需要下载 `AnlandTermux-5.13.3-compatible.apk`、`anland_5.13.3_aarch64.deb`、`xwayland_24.1.6-91_arm64.deb` 和 `kwin_anland-5.8-debian-4_6.3.6-92.zip` 四个文件。
 
-又如，在 Ubuntu 26.04 的 Chroot 容器中运行 Anland: Termux，并使用 Weston，需要下载 `AnlandTermux-5.13.1.apk`、`anland_5.11.0-1_aarch64.deb`、`xwayland_24.1.10-91_arm64.deb` 和 `weston_anland-5.13-ubuntu-14.0.2-92.zip` 四个文件。
+又如，在 Ubuntu 26.04 的 Chroot 容器中使用 GitHub Termux 运行 Anland: Termux 和 Weston，需要下载 `AnlandTermux-5.13.3.apk`、`anland_5.13.3_aarch64.deb`、`xwayland_24.1.10-91_arm64.deb` 和 `weston_anland-5.13-ubuntu-14.0.2-92.zip` 四个文件。
 
 ## 安装
 
-1. 在 Android 安装显示应用，如 `AnlandTermux-5.13.0.apk`。
+1. 在 Android 安装显示应用：GitHub Termux 使用 `AnlandTermux-5.13.3.apk`，F-Droid Termux 使用 `AnlandTermux-5.13.3-compatible.apk`。安装完成后，可以**长按应用图标**，进入设置界面。
 
-   安装完成后，可以**长按应用图标**，进入设置界面。
-
-2. 在 Termux 安装守护程序，如 `anland_5.11.0-1_aarch64.deb`。
+2. 在 Termux 安装守护程序，如 `anland_5.13.3_aarch64.deb`。
 
    ```sh
-   pkg reinstall ./anland_5.11.0-1_aarch64.deb
+   pkg reinstall ./anland_5.13.3_aarch64.deb
    ```
 
 > [!TIP]
@@ -66,8 +72,10 @@ echo $TERMUX_APP__APK_RELEASE
 > 使用方法如下。它将会启动 KDE Plasma 或 Weston，然后请切换到 Android 的“Anland Termux”应用。命令中的环境变量 `ANLAND_WESTON_SCALE` 为 Weston 的缩放倍数，请根据实际需要设置为整数。
 >
 > ```sh
-> killall anland > /dev/null 2>&1
-> anland > /dev/null 2>&1 &
+> # 启动守护程序：
+> killall anland > /dev/null 2>&1; anland > /dev/null 2>&1 &
+> # Compatible APK 需要额外运行 Binder 桥：
+> pkill -TERM -x anland-compatible; anland-compatible &
 > # 使用 Debian 13 的 KDE Plasma：
 > proot-distro login debian-anland --shared-tmp -- bash -c "startplasma-anland"
 > # 使用 Ubuntu 26.04 的 KDE Plasma：
@@ -91,7 +99,7 @@ echo $TERMUX_APP__APK_RELEASE
    ```sh
    sudo apt reinstall ./xwayland_24.1.6-91_arm64.deb
    unzip kwin_anland-5.8-debian-4_6.3.6-92.zip -d kwin-debs-install/
-   sudo apt reinstall kwin-debs-install/*.deb
+   sudo apt reinstall ./kwin-debs-install/*.deb
    rm -rf kwin-debs-install/
    ```
 
@@ -100,7 +108,7 @@ echo $TERMUX_APP__APK_RELEASE
    ```sh
    sudo apt reinstall ./xwayland_24.1.10-91_arm64.deb
    unzip weston_anland-5.13-ubuntu-14.0.2-92.zip -d weston-debs-install/
-   sudo apt reinstall weston-debs-install/*.deb
+   sudo apt reinstall ./weston-debs-install/*.deb
    rm -rf weston-debs-install/
    ```
 
@@ -153,9 +161,12 @@ echo $TERMUX_APP__APK_RELEASE
 1. 在 Termux 启动守护程序：
 
    ```sh
-   killall anland > /dev/null 2>&1
-   anland > /dev/null 2>&1 &
+   killall anland > /dev/null 2>&1; anland > /dev/null 2>&1 &
+   # Compatible APK 需要额外运行 Binder 桥：
+   pkill -TERM -x anland-compatible; anland-compatible &
    ```
+
+   使用 compatible APK 时，请在显示应用和守护程序运行期间保持 Termux 中的 `anland-compatible` 进程运行。
 
 2. 如果实际运行环境是 Linux 容器的话，需要将 Termux 的 `$TMPDIR` 绑定挂载到容器内部的 `/tmp`。
 
@@ -168,7 +179,7 @@ echo $TERMUX_APP__APK_RELEASE
 3. 进入实际运行环境后，下载并运行以下一键脚本。
 
 > [!TIP]
-> 为了使音频服务正常运行，执行脚本前请先确认 PipeWire 已安装。如 Termux 中的 `pipewire` 包，Debian/Ubuntu 中的 `pipewire-audio` 包。
+> 为了使音频服务正常运行，执行脚本前请先确认 PipeWire 已安装。如 Termux 中的 `pipewire` 包，Debian/Ubuntu 中的 `pipewire-audio` 和 `pipewire-libcamera` 包。
 
    KDE Plasma：[startplasma-anland.sh](../scripts/startplasma-anland.sh)
 
