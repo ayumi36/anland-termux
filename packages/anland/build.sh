@@ -21,4 +21,6 @@ termux_step_make_install() {
 	repo_root="$(realpath "$TERMUX_PKG_BUILDER_DIR/../..")"
 
 	install -Dm700 anland "$TERMUX_PREFIX/bin/anland"
+	install -Dm755 "$repo_root/termux/anland/anland-compatible" \
+		"$TERMUX_PREFIX/bin/anland-compatible"
 }

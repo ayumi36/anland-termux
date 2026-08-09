@@ -1,0 +1,22 @@
+#!/data/data/com.termux/files/usr/bin/sh
+set -eu
+
+if [ "$#" -gt 1 ] || { [ "$#" -eq 1 ] && [ -z "$1" ]; }; then
+    echo "usage: anland-compatible [SOCKET_PATH]" >&2
+    exit 1
+fi
+
+socket_path="${1:-${TMPDIR:-/data/data/com.termux/files/usr/tmp}/anland/display_daemon.sock}"
+
+apk_path="$(/system/bin/pm path com.anland.termux \
+    | sed -n 's/^package:\(.*\)$/\1/p' | head -n 1)"
+if [ -z "$apk_path" ]; then
+    echo "Anland Termux APK is not installed" >&2
+    exit 1
+fi
+
+export CLASSPATH="$apk_path"
+unset LD_LIBRARY_PATH LD_PRELOAD
+exec /system/bin/app_process -Xnoimage-dex2oat / \
+    --nice-name=anland-compatible \
+    com.anland.termux.CompatibleBridge "$socket_path"
