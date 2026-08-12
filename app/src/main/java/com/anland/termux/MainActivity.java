@@ -8,7 +8,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -18,6 +21,9 @@ import android.hardware.display.DisplayManager;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.ParcelFileDescriptor;
+import android.os.RemoteException;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.Display;
@@ -68,6 +74,9 @@ public class MainActivity extends Activity
     // Camera service fds/threads are created once and persist across reconnects;
     // this guards that one-time init (see applyCameraState).
     private boolean cameraInited = false;
+    private ICompatibleBridge compatibleBridge;
+    private boolean compatibleFdReady = false;
+    private boolean compatibleReceiverRegistered = false;
     private static final String DEFAULT_SOCKET_PATH = "/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock";
     private static final String KEY_ACCESSIBILITY_ENABLED = "accessibility_key_intercept";
     private static final String KEY_EXTRA_KEYS_ENABLED = "extra_keys_bar";
@@ -125,6 +134,43 @@ public class MainActivity extends Activity
     // Layout JSON the current bar was built from; used to detect edits on resume.
     private String mAppliedLayoutJson = "";
 
+    private final BroadcastReceiver compatibleBridgeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!CompatibleBridge.ACTION_START.equals(intent.getAction()))
+                return;
+
+            Bundle bundle = intent.getBundleExtra(null);
+            IBinder binder = bundle == null ? null : bundle.getBinder(null);
+            if (binder == null)
+                return;
+
+            ICompatibleBridge bridge = ICompatibleBridge.Stub.asInterface(binder);
+            boolean newBridge = compatibleBridge == null
+                || !compatibleBridge.asBinder().isBinderAlive();
+            if (newBridge) {
+                compatibleBridge = bridge;
+                compatibleFdReady = false;
+                try {
+                    binder.linkToDeath(() -> runOnUiThread(() -> {
+                        if (compatibleBridge != null
+                                && compatibleBridge.asBinder() == binder) {
+                            compatibleBridge = null;
+                            compatibleFdReady = false;
+                        }
+                    }), 0);
+                } catch (RemoteException ignored) {
+                }
+            }
+
+            // Wait until the Surface exists before asking the bridge to connect to
+            // the daemon. The daemon reads the consumer hello synchronously, so a
+            // connection opened before nativeStart() would temporarily block it.
+            if (surfaceReady)
+                attachCompatibleFd();
+        }
+    };
+
     public static MainActivity sInstance;
 
     // ADDED: VirtualKeyboardView instance
@@ -172,9 +218,8 @@ public class MainActivity extends Activity
     }
 
     // Push the current connection settings (socket path / root mode) to native
-    // before (re)connecting. The root helper is the executable bundled in the
-    // app's native lib dir; the bridge is a unix socket in our cache dir that
-    // the helper, launched via su, uses to hand back the daemon fd.
+    // before (re)connecting. Compatible builds receive the daemon fd from the
+    // Termux-side Binder bridge instead of calling connect() from this UID.
     private void applyConnectionConfig() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String sock = prefs.getString(KEY_SOCKET_PATH, DEFAULT_SOCKET_PATH);
@@ -183,12 +228,57 @@ public class MainActivity extends Activity
         boolean useRoot = prefs.getBoolean(KEY_USE_ROOT, false);
         String helperPath = getApplicationInfo().nativeLibraryDir + "/libfdhelper.so";
         String bridgePath = getCacheDir().getAbsolutePath() + "/anland_fdbridge.sock";
+        Native.nativeSetCompatibleMode(BuildConfig.COMPATIBLE);
         Native.nativeConfigure(sock.trim(), useRoot, helperPath, bridgePath);
+        if (BuildConfig.COMPATIBLE)
+            attachCompatibleFd();
         int customW = prefs.getInt("custom_width", 0);
         int customH = prefs.getInt("custom_height", 0);
         customScreenWidth = prefs.getInt("custom_width", 0);
         customScreenHeight = prefs.getInt("custom_height", 0);
         Native.nativeSetCustomResolution(customW, customH);
+    }
+
+    private void registerCompatibleReceiver() {
+        if (!BuildConfig.COMPATIBLE || compatibleReceiverRegistered)
+            return;
+
+        IntentFilter filter = new IntentFilter(CompatibleBridge.ACTION_START);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            registerReceiver(compatibleBridgeReceiver, filter, Context.RECEIVER_EXPORTED);
+        else
+            registerReceiver(compatibleBridgeReceiver, filter);
+        compatibleReceiverRegistered = true;
+    }
+
+    private void attachCompatibleFd() {
+        if (!BuildConfig.COMPATIBLE || compatibleBridge == null || compatibleFdReady)
+            return;
+
+        ParcelFileDescriptor pfd = null;
+        int fd = -1;
+        try {
+            pfd = compatibleBridge.getConnection();
+            if (pfd == null)
+                return;
+            fd = pfd.detachFd();
+            Native.nativeSetCompatibleFd(fd);
+            compatibleFdReady = true;
+        } catch (Exception e) {
+            Log.e(TAG, "failed to receive compatible daemon socket fd", e);
+        } finally {
+            if (fd < 0 && pfd != null) {
+                try {
+                    pfd.close();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    private void stopNative() {
+        Native.nativeStop();
+        compatibleFdReady = false;
     }
 
     @Override
@@ -199,6 +289,7 @@ public class MainActivity extends Activity
 
         sInstance = this;
         clipboard = new Clipboard(this);
+        registerCompatibleReceiver();
         mDisplayCutoutMode = DisplayCutoutMode.get(
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE));
 
@@ -577,7 +668,7 @@ public class MainActivity extends Activity
         // later reconnect. Idempotent, so safe to call on every resume.
         applyCameraState();
         if (surfaceReady) {
-            Native.nativeStop();
+            stopNative();
             applyConnectionConfig();
             Native.nativeStart(surfaceView.getHolder().getSurface(), clipboard);
             pushRefreshRate();
@@ -695,7 +786,7 @@ public class MainActivity extends Activity
         if (dm != null)
             dm.unregisterDisplayListener(displayListener);
         if (!mPipTransitionPending && !isInPictureInPictureMode())
-            Native.nativeStop();
+            stopNative();
     }
 
     private boolean hasPipPermission() {
@@ -742,7 +833,11 @@ public class MainActivity extends Activity
 
     @Override
     protected void onDestroy() {
-        Native.nativeStop();
+        stopNative();
+        if (compatibleReceiverRegistered) {
+            unregisterReceiver(compatibleBridgeReceiver);
+            compatibleReceiverRegistered = false;
+        }
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm != null) nm.cancel(NOTIFICATION_ID);
         if (cameraInited) {
@@ -843,7 +938,7 @@ public class MainActivity extends Activity
         surfaceReady = true;
         // Same ordering guarantee as onResume: camera service settled before connect.
         applyCameraState();
-        Native.nativeStop();
+        stopNative();
         applyConnectionConfig();
         Native.nativeStart(holder.getSurface(), clipboard);
         pushRefreshRate();
@@ -859,7 +954,7 @@ public class MainActivity extends Activity
         surfaceReady = false;
         releaseAllMouseButtons();
         resetCapturedTouchpadGesture();
-        Native.nativeStop();
+        stopNative();
     }
 
 

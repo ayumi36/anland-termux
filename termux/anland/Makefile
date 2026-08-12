@@ -6,6 +6,7 @@ LDLIBS ?=
 
 PREFIX ?= /data/data/com.termux/files/usr
 BINDIR ?= $(PREFIX)/bin
+COMPATIBLE_BRIDGE ?= anland-compatible
 
 SOURCES = anland.c common/socket_utils.c
 OBJECTS = $(SOURCES:.c=.o)
@@ -23,6 +24,7 @@ anland: $(OBJECTS)
 install: anland
 	install -d "$(DESTDIR)$(BINDIR)"
 	install -m 0755 anland "$(DESTDIR)$(BINDIR)/anland"
+	install -m 0755 "$(COMPATIBLE_BRIDGE)" "$(DESTDIR)$(BINDIR)/$(COMPATIBLE_BRIDGE)"
 
 clean:
 	rm -f anland $(OBJECTS)

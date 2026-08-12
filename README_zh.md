@@ -28,6 +28,11 @@
 * 其他处理器（如联发科天玑、Google Tensor、三星猎户座等）目前只能使用软件渲染（即 LLVMpipe），而且不一定能成功进入 Wayland 桌面。目前我只测试了 Google Tensor G1，它可以在 PRoot 或 Chroot 容器里成功进入桌面。对于其他处理器，你可以按照“用户指南”一节的说明先行尝试。
   **欢迎在 [Issues](https://github.com/lfdevs/anland-termux/issues) 里反馈本项目在你的设备上的运行情况。**
 
+### Termux 来源及变体
+
+* 如果 Termux 来自 [GitHub 官方仓库](https://github.com/termux/termux-app/releases)，请使用 `AnlandTermux-<version>.apk`。它使用 `sharedUserId` 且作为 Termux 的一部分运行，因此 Android 会一直将它们视为同一个应用，而且不会降低其速度。
+* 如果 Termux 来自 [F-Droid](https://f-droid.org/packages/com.termux/) 或 ZeroTermux 等变体，请改用 `AnlandTermux-<version>-compatible.apk`。它不使用 `sharedUserId`，而是由 Termux 侧的 `anland-compatible` bridge 持有守护程序 socket，再通过 Binder 传递 fd。详情请参阅[用户指南](docs/user-guide_zh.md)。
+
 ## 用户指南
 
 Anland: Termux 的安装和使用说明请参见：[Anland：Termux 用户指南](docs/user-guide_zh.md)

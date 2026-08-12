@@ -12,8 +12,10 @@
   - Java 层负责 Activity、设置、输入、剪贴板、相机和音频等交互。
   - `app/src/main/jni/` 包含 Surface、dma-buf、Unix Socket 及 JNI 桥接等原生代码。
   - 包名为 `com.anland.termux`，应用名称为 `Anland Termux`。
-  - 使用共享 UID `com.termux`，并通过 `app/testkey_untrusted.jks` 与 Termux GitHub 版本兼容签名。
+  - `standard` flavor 使用共享 UID `com.termux`，并通过 `app/testkey_untrusted.jks` 与 Termux GitHub 版本兼容签名。
+  - `compatible` flavor 不使用 `sharedUserId`，但保持相同的 application ID、versionCode 和签名密钥，并在 versionName 后添加 `-compatible`。
 - `termux/anland/`：Termux 侧的 `anland` 守护程序，在 Android 显示端与 Wayland 生产端之间中继控制消息和文件描述符。默认套接字为 `$TMPDIR/anland/display_daemon.sock`；`TMPDIR` 未设置时回退到 `/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock`。
+- `termux/anland/anland-compatible`：compatible APK 的 Termux 侧启动脚本，通过 `app_process` 从已安装的 APK 启动 `CompatibleBridge`。
 - `packages/anland/`：Termux Packages 配方草稿，用于将守护程序构建为 Termux 软件包。
 - `scripts/`：Termux 原生环境及 PRoot、Chroot、LXC 容器中的 KDE Plasma 和 Weston 一键启动脚本。
 - `images/`：Debian 13 和 Ubuntu 26.04 的 ARM64 PRoot 容器镜像定义；`images/packages.json` 记录 KWin、Weston、XWayland 和 Mesa 构建产物的下载地址。
@@ -21,6 +23,30 @@
 - `.github/workflows/`：APK、Debian 软件包及容器镜像的 GitHub Actions 工作流。
 - `docs/`：中英文用户文档和开发者文档；中文文件使用 `_zh.md` 后缀。
 - `out/`：本地构建脚本生成的 APK 和守护程序输出目录，不应提交到 Git。
+
+## 传输方式
+
+### Standard 传输方式
+
+Standard APK 依赖 Android 的 shared UID 机制，适用于 GitHub 发布的 Termux：
+
+1. `standard` flavor 的 manifest 声明 `android:sharedUserId="com.termux"`，并使用 `app/testkey_untrusted.jks` 签名。安装时，Android 会校验它与已安装 Termux 的签名是否匹配；匹配后，两个应用使用同一个 Linux UID。
+2. `anland` 守护程序以 Termux UID 在 `display_daemon.sock` 上监听。由于 Standard APK 也以该 UID 运行，显示端可访问这个 Unix socket，不需要跨 UID 的 socket 权限，也不需要额外的 bridge 进程。
+3. `MainActivity` 配置默认或用户设置的 socket 路径后，native consumer 在非 compatible 模式下调用 `connect_to_deamon()`；该函数通过 `connect_unix()` 直接连接守护程序。此路径不启动 `anland-compatible`，也不经过 Binder。
+4. 建立控制连接后，native display context 发送 consumer hello 及其显示侧文件描述符。守护程序将该连接登记为 consumer，并在 Wayland producer 连接后中继 screen 信息和所需的文件描述符。
+
+这种方式依赖 Termux 与 Standard APK 的签名匹配。F-Droid 版 Termux 及其他使用不同签名密钥的变体无法满足该条件，Android 会拒绝安装或更新 Standard APK；这些环境应使用 Compatible APK。使用 Standard APK 时只需启动 `anland` 守护程序，不应启动 `anland-compatible`。
+
+### Compatible 传输方式
+
+Compatible APK 参照 Termux:X11 的独立版传输方式，不需要 F-Droid 的签名密钥：
+
+1. `anland-compatible` 以 Termux UID 运行，通过 `/system/bin/app_process` 从已安装的 APK 加载 `com.anland.termux.CompatibleBridge`。
+2. `CompatibleBridge` 以 Termux UID 连接 `display_daemon.sock`，持有连接的 `LocalSocket`，并向指定包发送包含 `ICompatibleBridge` Binder 的广播。
+3. `MainActivity` 接收 Binder，调用 `getConnection()`，并 detach 返回的 `ParcelFileDescriptor`；`Native.nativeSetCompatibleFd()` 将重复的 fd 交给 `connect_to_deamon_with_fd()`。
+4. native display context 在整个生命周期内持有该 fd。现有 fallback 协议可以在同一控制连接上重新传递 data/fence/audio fd，因此 Android 侧不需要调用 Unix `connect()`。
+
+用户在 Termux 中运行 `anland-compatible [SOCKET_PATH]` 启动 bridge，方式与独立版 Termux:X11 启动其入口点相同。bridge 会持续运行并重复发布指定包的 Binder，使 Activity 重建后仍能获取新的重复 fd；不需要 F-Droid 签名密钥，也不需要 Termux 插件权限。
 
 ## 调试
 
@@ -150,11 +176,20 @@ compileSdk 36
 tools/build-app.sh
 ```
 
+该脚本构建 `standardDebug` flavor。compatible flavor 使用：
+
+```sh
+tools/build-compatible-app.sh
+```
+
 构建产物：
 
 ```text
 out/AnlandTermux-<version>.apk
+out/AnlandTermux-<version>-compatible.apk
 ```
+
+两个 flavor 都使用 `app/testkey_untrusted.jks`，并保持相同的 `versionCode`；compatible flavor 的 `-compatible` versionName 后缀由 Gradle 添加。
 
 ### Anland 守护程序
 
@@ -169,6 +204,8 @@ tools/build-termux-anland.sh
 ```text
 out/anland
 ```
+
+`make -C termux/anland install` 和软件包配方还会安装 compatible APK 所需的 `anland-compatible` 启动脚本。
 
 Termux 软件包的配方草稿位于：
 
@@ -263,14 +300,14 @@ Termux 软件包关联的 Pull requests：https://github.com/termux/termux-packa
 
 触发方式：
 
-- Pull request：当目标分支为 `termux` 且 `app/**` 发生变化时自动运行，构建 GitHub 提供的 PR 合并引用。
+- Pull request：当目标分支为 `termux` 且 APK、Termux bridge、构建脚本或工作流发生变化时自动运行，构建 GitHub 提供的 PR 合并引用。
 - 手动触发：通过 `workflow_dispatch` 运行。
 
 手动输入：
 
 - `ref`：必填，要构建的 Git 引用，可以是分支、TAG 或 commit；默认值为 `termux`。
 
-构建环境固定使用 JDK 21、Gradle 9.6.0 和 Android NDK 29.0.14206865，并调用 `tools/build-app.sh`。
+构建环境固定使用 JDK 21、Gradle 9.6.0 和 Android NDK 29.0.14206865，并同时调用 `tools/build-app.sh` 与 `tools/build-compatible-app.sh`。Pull request 构建会在 compatible 后缀之前加入 `-debug-<短 SHA>`，例如 `AnlandTermux-5.13.2-debug-70d1b85-compatible.apk`。
 
 ### Build Docker Images
 

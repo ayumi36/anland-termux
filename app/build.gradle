@@ -8,6 +8,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        aidl = true
     }
 
     signingConfigs {
@@ -34,6 +35,19 @@ android {
             cmake {
                 arguments "-DANDROID_STL=none"
             }
+        }
+    }
+
+    flavorDimensions "transport"
+    productFlavors {
+        standard {
+            dimension "transport"
+            buildConfigField "boolean", "COMPATIBLE", "false"
+        }
+        compatible {
+            dimension "transport"
+            buildConfigField "boolean", "COMPATIBLE", "true"
+            versionNameSuffix "-compatible"
         }
     }
 

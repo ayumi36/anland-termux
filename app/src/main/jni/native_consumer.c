@@ -84,6 +84,8 @@ static struct consumer_state g_state = {
 static pthread_mutex_t cfg_lock = PTHREAD_MUTEX_INITIALIZER;
 static char cfg_socket_path[256] = "/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock";
 static bool cfg_use_root = false;
+static bool cfg_use_compatible_bridge = false;
+static int cfg_compatible_fd = -1;
 static char cfg_helper_path[512] = "";
 static char cfg_bridge_path[512] = "";
 
@@ -383,6 +385,8 @@ static int do_connect(struct consumer_state *s)
     /* Snapshot the connection config for this attempt. */
     pthread_mutex_lock(&cfg_lock);
     bool use_root = cfg_use_root;
+    bool use_compatible_bridge = cfg_use_compatible_bridge;
+    bool compatible_fd_available = cfg_compatible_fd >= 0;
     char sock_path[sizeof(cfg_socket_path)];
     char helper_path[sizeof(cfg_helper_path)];
     char bridge_path[sizeof(cfg_bridge_path)];
@@ -390,6 +394,11 @@ static int do_connect(struct consumer_state *s)
     memcpy(helper_path, cfg_helper_path, sizeof(helper_path));
     memcpy(bridge_path, cfg_bridge_path, sizeof(bridge_path));
     pthread_mutex_unlock(&cfg_lock);
+
+    if (use_compatible_bridge && !compatible_fd_available) {
+        LOGI("compatible bridge has not supplied a socket fd yet");
+        return -1;
+    }
 
     const char *sock = sock_path;
 
@@ -439,10 +448,26 @@ static int do_connect(struct consumer_state *s)
     if (collect_dmabufs(s) < 0)
         return -1;
 
-    LOGI("connecting to %s (%dx%d, %d bufs, root=%d)", sock,
-         s->screen_w, s->screen_h, s->buf_count, use_root);
+    LOGI("connecting to %s (%dx%d, %d bufs, root=%d, compatible=%d)", sock,
+         s->screen_w, s->screen_h, s->buf_count, use_root,
+         use_compatible_bridge);
 
-    if (use_root) {
+    if (use_compatible_bridge) {
+        pthread_mutex_lock(&cfg_lock);
+        /* Keep the Binder-supplied descriptor as a master copy. Each display
+         * context owns a duplicate, while the Termux bridge keeps the actual
+         * daemon connection alive across consumer reconnect attempts. */
+        int compatible_fd = cfg_compatible_fd >= 0 ? dup(cfg_compatible_fd) : -1;
+        pthread_mutex_unlock(&cfg_lock);
+        if (compatible_fd < 0) {
+            LOGE("could not duplicate compatible bridge socket fd: %s", strerror(errno));
+            return -1;
+        }
+        if (connect_to_deamon_with_fd(&s->ctx, compatible_fd) < 0) {
+            LOGE("connect_to_deamon_with_fd from compatible bridge failed");
+            return -1;
+        }
+    } else if (use_root) {
         int ctrl_fd = recv_fd_via_root_helper(sock, helper_path, bridge_path);
         if (ctrl_fd < 0) {
             LOGE("root helper connect failed");
@@ -639,6 +664,43 @@ Java_com_anland_termux_Native_nativeConfigure(
 }
 
 JNIEXPORT void JNICALL
+Java_com_anland_termux_Native_nativeSetCompatibleMode(
+    JNIEnv *env, jclass clazz, jboolean enabled)
+{
+    (void)env;
+    (void)clazz;
+
+    pthread_mutex_lock(&cfg_lock);
+    cfg_use_compatible_bridge = (enabled == JNI_TRUE);
+    if (!cfg_use_compatible_bridge && cfg_compatible_fd >= 0) {
+        close(cfg_compatible_fd);
+        cfg_compatible_fd = -1;
+    }
+    pthread_mutex_unlock(&cfg_lock);
+
+    LOGI("compatible bridge mode: %d", enabled == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_com_anland_termux_Native_nativeSetCompatibleFd(
+    JNIEnv *env, jclass clazz, jint fd)
+{
+    (void)env;
+    (void)clazz;
+
+    if (fd < 0)
+        return;
+
+    pthread_mutex_lock(&cfg_lock);
+    if (cfg_compatible_fd >= 0)
+        close(cfg_compatible_fd);
+    cfg_compatible_fd = fd;
+    pthread_mutex_unlock(&cfg_lock);
+
+    LOGI("received compatible bridge socket fd=%d", fd);
+}
+
+JNIEXPORT void JNICALL
 Java_com_anland_termux_Native_nativeSetCustomResolution(
     JNIEnv* env, jclass clazz, jint width, jint height)
 {
@@ -756,6 +818,13 @@ Java_com_anland_termux_Native_nativeStop(
     }
 
     cleanup_dmabufs(&g_state);
+
+    pthread_mutex_lock(&cfg_lock);
+    if (cfg_compatible_fd >= 0) {
+        close(cfg_compatible_fd);
+        cfg_compatible_fd = -1;
+    }
+    pthread_mutex_unlock(&cfg_lock);
 
     if (g_state.window) {
         ANativeWindow_release(g_state.window);

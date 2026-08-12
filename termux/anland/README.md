@@ -23,6 +23,14 @@ anland /custom/path/display_daemon.sock
 anland --socket /custom/path/display_daemon.sock
 ```
 
+The package also installs `anland-compatible`. It starts the compatible APK's
+Termux-side Binder bridge, which connects to the daemon as the Termux UID and
+passes a duplicate socket fd to the app:
+
+```sh
+anland-compatible
+```
+
 Build inside Termux:
 
 ```sh

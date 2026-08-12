@@ -15,6 +15,8 @@ public final class Native {
 
     public static native void nativeConfigure(String socketPath, boolean useRoot,
                                               String helperPath, String bridgePath);
+    public static native void nativeSetCompatibleMode(boolean enabled);
+    public static native void nativeSetCompatibleFd(int fd);
 
     // With static natives there is no `thiz`, so native is handed the object it
     // calls back into (the Clipboard instance hosting nativeSetClipboardText /
