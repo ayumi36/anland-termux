@@ -339,6 +339,24 @@ public class SettingsActivity extends Activity {
         bindButton.setText(R.string.bind_key_button);
         bindButton.setOnClickListener(v -> startListening());
         root.addView(bindButton);
+
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        Switch raiseDesktopSwitch = new Switch(this);
+        raiseDesktopSwitch.setText(R.string.raise_desktop_for_soft_keyboard);
+        raiseDesktopSwitch.setTextSize(14);
+        raiseDesktopSwitch.setPadding(0, dp(8), 0, 0);
+        raiseDesktopSwitch.setChecked(!prefs.getBoolean(KEY_KEYBOARD_FLOATING, true));
+        raiseDesktopSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean(KEY_KEYBOARD_FLOATING, !checked).apply());
+        root.addView(raiseDesktopSwitch);
+
+        TextView raiseDesktopHint = new TextView(this);
+        raiseDesktopHint.setText(R.string.raise_desktop_for_soft_keyboard_hint);
+        raiseDesktopHint.setTextSize(12);
+        raiseDesktopHint.setTextColor(getColor(R.color.settings_text_secondary));
+        raiseDesktopHint.setPadding(0, dp(4), 0, dp(8));
+        root.addView(raiseDesktopHint);
     }
 
     private void buildAccessibilitySection(LinearLayout root) {
@@ -414,23 +432,6 @@ public class SettingsActivity extends Activity {
         autoShowHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(autoShowHint);
 
-        // === Keyboard floating ===
-        Switch keyboardFloatingSwitch = new Switch(this);
-        keyboardFloatingSwitch.setText(R.string.keyboard_floating_switch);
-        keyboardFloatingSwitch.setTextSize(14);
-        keyboardFloatingSwitch.setPadding(0, dp(16), 0, 0);
-        keyboardFloatingSwitch.setChecked(prefs.getBoolean(KEY_KEYBOARD_FLOATING, true));
-        keyboardFloatingSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean(KEY_KEYBOARD_FLOATING, checked).apply());
-        root.addView(keyboardFloatingSwitch);
-
-        TextView keyboardFloatingHint = new TextView(this);
-        keyboardFloatingHint.setText(R.string.keyboard_floating_hint);
-        keyboardFloatingHint.setTextSize(12);
-        keyboardFloatingHint.setTextColor(getColor(R.color.settings_text_secondary));
-        keyboardFloatingHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(keyboardFloatingHint);
     }
 
     private void buildCustomLayoutSection(LinearLayout root) {
