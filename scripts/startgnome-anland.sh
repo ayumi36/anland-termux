@@ -15,6 +15,9 @@ ANLAND_HAVE_KGSL=0
 ANLAND_PRIVATE_SYSTEM_BUS_PID=
 ANLAND_PRIVATE_SYSTEM_BUS_SOCKET=
 ANLAND_GNOME_SESSION_PID=
+ANLAND_GNOME_XSETTINGS_PID=
+ANLAND_GNOME_XSETTINGS_SERVICE=
+ANLAND_GNOME_XSETTINGS_DATA_DIR=${ANLAND_GNOME_XSETTINGS_DATA_DIR:-}
 SCRIPT_PATH=$(readlink -f -- "${BASH_SOURCE[0]}")
 
 if [[ -r /dev/kgsl-3d0 ]]; then
@@ -29,7 +32,7 @@ show_usage() {
         '  ANLAND_SOCKET              Display daemon socket path' \
         '  GNOME_WAYLAND_DISPLAY      Wayland socket name (default: wayland-anland)' \
         '  ANLAND_GNOME_XWAYLAND=0    Disable Xwayland' \
-        '  ANLAND_GNOME_DEBUG=1       Print GNOME Shell logs to the terminal' \
+        '  ANLAND_GNOME_DEBUG=1       Print GNOME Shell and session logs to the terminal' \
         '  ANLAND_AUDIO_DEBUG=1       Enable verbose PipeWire/WirePlumber logs' \
         '  ANLAND_LOG_DIR             Directory for session and audio logs'
 }
@@ -163,6 +166,8 @@ stop_anland_daemon() {
 }
 
 set_common_environment() {
+    local prefix
+
     unset DISPLAY
     unset ANLAND ANLAND_NO_DRM_DEVICE ANLAND_DRM_DEVICE EGL_PLATFORM
     unset MESA_LOADER_DRIVER_OVERRIDE TURNIP_KMD GALLIUM_DRIVER
@@ -174,6 +179,23 @@ set_common_environment() {
     export XDG_SESSION_TYPE=wayland
     export GNOME_SHELL_SESSION_MODE=gnome
     export WAYLAND_DISPLAY="$GNOME_WAYLAND_DISPLAY"
+
+    prefix=${PREFIX:-}
+    prefix=${prefix%/}
+    export XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    export XDG_CONFIG_DIRS="${XDG_CONFIG_DIRS:-/etc/xdg}"
+    if [[ -n $prefix ]]; then
+        export XDG_DATA_DIRS="$prefix/share:$XDG_DATA_DIRS"
+        export XDG_CONFIG_DIRS="$prefix/etc/xdg:$XDG_CONFIG_DIRS"
+    fi
+
+    if [[ -n ${TERMUX_VERSION:-} ]] && xwayland_is_enabled; then
+        # dbus-daemon snapshots XDG_DATA_DIRS when dbus-run-session starts.
+        # Put the temporary service in a directory it will search later.
+        ANLAND_GNOME_XSETTINGS_DATA_DIR="$XDG_RUNTIME_DIR/anland-gnome-xsettings/share"
+        export ANLAND_GNOME_XSETTINGS_DATA_DIR
+        export XDG_DATA_DIRS="$ANLAND_GNOME_XSETTINGS_DATA_DIR:$XDG_DATA_DIRS"
+    fi
 }
 
 prepare_ptyxis_systemd_run_shim() {
@@ -499,6 +521,29 @@ session_systemd_is_available() {
     fi
 }
 
+mutter_x11_scaling_is_available() {
+    if command -v gdbus > /dev/null 2>&1; then
+        gdbus call --session \
+            --timeout 1 \
+            --dest org.gnome.Mutter.X11 \
+            --object-path /org/gnome/Mutter/X11 \
+            --method org.freedesktop.DBus.Properties.Get \
+            org.gnome.Mutter.X11 \
+            UiScalingFactor \
+            > /dev/null 2>&1
+    elif command -v dbus-send > /dev/null 2>&1; then
+        dbus-send --session --print-reply --reply-timeout=1000 \
+            --dest=org.gnome.Mutter.X11 \
+            /org/gnome/Mutter/X11 \
+            org.freedesktop.DBus.Properties.Get \
+            string:org.gnome.Mutter.X11 \
+            string:UiScalingFactor \
+            > /dev/null 2>&1
+    else
+        return 1
+    fi
+}
+
 session_manager_initialized() {
     if command -v gdbus > /dev/null 2>&1; then
         gdbus call --session \
@@ -527,6 +572,8 @@ find_gnome_session_service() {
     fi
 
     for candidate in \
+        "${PREFIX:+${PREFIX%/}/libexec/gnome-session-service}" \
+        "${PREFIX:+${PREFIX%/}/lib/gnome-session/gnome-session-service}" \
         /usr/libexec/gnome-session-service \
         /usr/lib/gnome-session/gnome-session-service; do
         if [[ -x $candidate ]]; then
@@ -643,7 +690,138 @@ stop_gnome_session_service() {
     ANLAND_GNOME_SESSION_PID=
 }
 
+stop_termux_xsettings() {
+    local attempts=20
+    local xsettings_pid=$ANLAND_GNOME_XSETTINGS_PID
+
+    if [[ -n $xsettings_pid ]] &&
+        kill -0 "$xsettings_pid" > /dev/null 2>&1; then
+        kill "$xsettings_pid" > /dev/null 2>&1 || true
+        while kill -0 "$xsettings_pid" > /dev/null 2>&1 &&
+            [[ $attempts -gt 0 ]]; do
+            sleep 0.1
+            attempts=$((attempts - 1))
+        done
+        wait "$xsettings_pid" > /dev/null 2>&1 || true
+    fi
+
+    ANLAND_GNOME_XSETTINGS_PID=
+    if [[ -n $ANLAND_GNOME_XSETTINGS_SERVICE ]]; then
+        rm -f -- "$ANLAND_GNOME_XSETTINGS_SERVICE"
+    fi
+    ANLAND_GNOME_XSETTINGS_SERVICE=
+}
+
+find_gsd_xsettings() {
+    local candidate
+
+    if command -v gsd-xsettings > /dev/null 2>&1; then
+        command -v gsd-xsettings
+        return 0
+    fi
+
+    for candidate in \
+        "${PREFIX:+${PREFIX%/}/libexec/gsd-xsettings}" \
+        "${PREFIX:+${PREFIX%/}/lib/gnome-settings-daemon/gsd-xsettings}" \
+        /usr/libexec/gsd-xsettings \
+        /usr/lib/gnome-settings-daemon/gsd-xsettings; do
+        if [[ -x $candidate ]]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+start_termux_xsettings() {
+    local xsettings_path
+    local service_dir="$ANLAND_GNOME_XSETTINGS_DATA_DIR/dbus-1/services"
+    local service_path="$service_dir/org.gnome.SettingsDaemon.XSettings.service"
+
+    [[ -n ${TERMUX_VERSION:-} ]] || return 0
+    xwayland_is_enabled || return 0
+
+    if [[ -z $ANLAND_GNOME_XSETTINGS_DATA_DIR ]]; then
+        print_warning "The Termux XSettings service directory is unavailable; X11 cursor scaling may be unavailable."
+        return 1
+    fi
+
+    if ! xsettings_path=$(find_gsd_xsettings); then
+        print_warning "Termux XSettings support is unavailable; gsd-xsettings was not found."
+        return 1
+    fi
+
+    # GNOME Shell can take longer than the former ten-second timeout to
+    # bring up Xwayland on a fresh Termux session. This helper is cleaned up
+    # with the session, so wait until Mutter publishes the service that also
+    # guarantees the D-Bus activation environment has DISPLAY and XAUTHORITY.
+    while ! mutter_x11_scaling_is_available; do
+        sleep 0.2
+    done
+
+    install -d -m 0700 "$service_dir"
+    printf '%s\n' \
+        '[D-BUS Service]' \
+        'Name=org.gnome.SettingsDaemon.XSettings' \
+        "Exec=$xsettings_path" \
+        > "$service_path"
+    ANLAND_GNOME_XSETTINGS_SERVICE=$service_path
+
+    if command -v gdbus > /dev/null 2>&1; then
+        if ! gdbus call --session \
+            --timeout 2 \
+            --dest org.freedesktop.DBus \
+            --object-path /org/freedesktop/DBus \
+            --method org.freedesktop.DBus.ReloadConfig \
+            > /dev/null 2>&1; then
+            print_warning "The session bus rejected its service configuration reload; X11 cursor scaling may be unavailable."
+            return 1
+        fi
+
+        if ! gdbus call --session \
+            --timeout 2 \
+            --dest org.freedesktop.DBus \
+            --object-path /org/freedesktop/DBus \
+            --method org.freedesktop.DBus.StartServiceByName \
+            org.gnome.SettingsDaemon.XSettings \
+            0 \
+            > /dev/null 2>&1; then
+            print_warning "The session bus could not start gsd-xsettings; X11 cursor scaling may be unavailable."
+            return 1
+        fi
+    elif command -v dbus-send > /dev/null 2>&1; then
+        if ! dbus-send --session --print-reply --reply-timeout=2000 \
+            --dest=org.freedesktop.DBus \
+            /org/freedesktop/DBus \
+            org.freedesktop.DBus.ReloadConfig \
+            > /dev/null 2>&1; then
+            print_warning "The session bus rejected its service configuration reload; X11 cursor scaling may be unavailable."
+            return 1
+        fi
+
+        if ! dbus-send --session --print-reply --reply-timeout=2000 \
+            --dest=org.freedesktop.DBus \
+            /org/freedesktop/DBus \
+            org.freedesktop.DBus.StartServiceByName \
+            string:org.gnome.SettingsDaemon.XSettings \
+            uint32:0 \
+            > /dev/null 2>&1; then
+            print_warning "The session bus could not start gsd-xsettings; X11 cursor scaling may be unavailable."
+            return 1
+        fi
+    else
+        print_warning "Neither gdbus nor dbus-send is available; cannot start gsd-xsettings."
+        return 1
+    fi
+
+    if [[ $ANLAND_GNOME_DEBUG -eq 1 ]]; then
+        printf '%s\n' 'GNOME XSettings service started for Xwayland.' >&2
+    fi
+}
+
 cleanup_gnome_session() {
+    stop_termux_xsettings
     stop_gnome_session_service
     stop_audio_services
     stop_private_system_bus
@@ -656,8 +834,11 @@ prepare_gnome_session_definition() {
     local session_source
     local desktop_script_path=${SCRIPT_PATH//\\/\\\\}
     local shell_phase='X-GNOME-Autostart-Phase=DisplayServer'
+    local component
+    local -a masked_settings_daemons=()
+    # GNOME Shell's non-systemd readiness notification uses this desktop ID.
     local -a session_filters=(
-        -e 's/org\.gnome\.Shell/org.gnome.Shell.Anland/g'
+        -e ''
     )
 
     desktop_script_path=${desktop_script_path//\"/\\\"}
@@ -669,7 +850,22 @@ prepare_gnome_session_definition() {
         return 1
     fi
 
-    if ! xwayland_is_enabled; then
+    # The Termux Keyboard and Power plugins crash repeatedly. As required
+    # components, they trigger gnome-session-failed. Start XSettings separately
+    # after Mutter publishes the Xwayland activation environment.
+    if [[ -n ${TERMUX_VERSION:-} ]]; then
+        masked_settings_daemons=(
+            org.gnome.SettingsDaemon.Keyboard
+            org.gnome.SettingsDaemon.Power
+            org.gnome.SettingsDaemon.XSettings
+        )
+        session_filters+=(
+            -e '/^RequiredComponents=/s/org\.gnome\.SettingsDaemon\.Keyboard;//g'
+            -e '/^RequiredComponents=/s/org\.gnome\.SettingsDaemon\.Power;//g'
+            -e '/^RequiredComponents=/s/org\.gnome\.SettingsDaemon\.XSettings;//g'
+        )
+    elif ! xwayland_is_enabled; then
+        masked_settings_daemons=(org.gnome.SettingsDaemon.XSettings)
         session_filters+=(
             -e '/^RequiredComponents=/s/org\.gnome\.SettingsDaemon\.XSettings;//g'
         )
@@ -690,10 +886,20 @@ prepare_gnome_session_definition() {
         'X-GNOME-Provides=windowmanager' \
         'X-GNOME-Autostart-Notify=true' \
         'NoDisplay=true' \
-        > "$runtime_config_dir/autostart/org.gnome.Shell.Anland.desktop"
+        > "$runtime_config_dir/autostart/org.gnome.Shell.desktop"
 
-    export XDG_DATA_DIRS="$runtime_data_dir:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
-    export XDG_CONFIG_DIRS="$runtime_config_dir:${XDG_CONFIG_DIRS:-/etc/xdg}"
+    for component in "${masked_settings_daemons[@]}"; do
+        printf '%s\n' \
+            '[Desktop Entry]' \
+            'Type=Application' \
+            "Name=$component" \
+            'Exec=true' \
+            'Hidden=true' \
+            > "$runtime_config_dir/autostart/$component.desktop"
+    done
+
+    export XDG_DATA_DIRS="$runtime_data_dir:$XDG_DATA_DIRS"
+    export XDG_CONFIG_DIRS="$runtime_config_dir:$XDG_CONFIG_DIRS"
 }
 
 run_gnome_shell() {
@@ -795,25 +1001,43 @@ run_gnome_session() {
     fi
 
     if ! prepare_gnome_session_definition "$standalone_service"; then
-        print_warning "A GNOME session definition is unavailable; starting GNOME Shell without the remaining gnome-session components."
-    elif [[ $standalone_service -eq 0 ]] && command -v gnome-session > /dev/null 2>&1; then
-        gnome-session --session=anland
-        return
-    elif [[ $standalone_service -eq 1 ]]; then
+        print_error "A GNOME session definition is unavailable. Install or reinstall gnome-session and ensure its data directory is available through XDG_DATA_DIRS."
+        return 1
+    fi
+
+    if [[ -n ${TERMUX_VERSION:-} ]] && xwayland_is_enabled; then
+        # XSettings must start after Mutter publishes its X11 environment, but
+        # before D-Bus-activated X11 applications are launched.
+        ANLAND_GNOME_XSETTINGS_SERVICE="$ANLAND_GNOME_XSETTINGS_DATA_DIR/dbus-1/services/org.gnome.SettingsDaemon.XSettings.service"
+        if [[ $ANLAND_GNOME_DEBUG -eq 1 ]]; then
+            start_termux_xsettings &
+        else
+            mkdir -p "${ANLAND_LOG_DIR:-$XDG_RUNTIME_DIR/anland-logs}"
+            start_termux_xsettings \
+                > "${ANLAND_LOG_DIR:-$XDG_RUNTIME_DIR/anland-logs}/gnome-xsettings.log" 2>&1 &
+        fi
+        ANLAND_GNOME_XSETTINGS_PID=$!
+    fi
+
+    if [[ $standalone_service -eq 1 ]]; then
         print_warning "The GNOME session systemd service is unavailable; using the standalone GNOME session service."
         if run_gnome_session_service "$session_service"; then
             return
         fi
-        print_warning "The standalone GNOME session service failed; starting GNOME Shell directly."
-    elif command -v gnome-session > /dev/null 2>&1; then
-        print_warning "The standalone GNOME session service is unavailable; trying gnome-session directly."
-        gnome-session --session=anland
-        return
-    else
-        print_warning "gnome-session is unavailable; starting GNOME Shell without the remaining session components."
+        print_warning "The standalone GNOME session service failed; trying gnome-session directly."
     fi
 
-    run_gnome_shell 0
+    if command -v gnome-session > /dev/null 2>&1; then
+        if [[ $ANLAND_GNOME_DEBUG -eq 1 ]]; then
+            GNOME_SESSION_DEBUG=1 gnome-session --session=anland
+        else
+            gnome-session --session=anland
+        fi
+        return
+    fi
+
+    print_error "gnome-session is unavailable. Install gnome-session before starting GNOME on Anland."
+    return 1
 }
 
 start_gnome() {
@@ -844,6 +1068,9 @@ start_gnome() {
     stop_gnome
     stop_audio_services
     clean_gnome_socket
+    if [[ -n $ANLAND_GNOME_XSETTINGS_DATA_DIR ]]; then
+        rm -f -- "$ANLAND_GNOME_XSETTINGS_DATA_DIR/dbus-1/services/org.gnome.SettingsDaemon.XSettings.service"
+    fi
 
     printf '%b\n' "${GREEN}Starting GNOME. Please switch to the \"Anland Termux\" app.${NC}"
     dbus-run-session -- "$SCRIPT_PATH" --gnome-session
