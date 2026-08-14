@@ -1083,6 +1083,9 @@ public class MainActivity extends Activity
             }
         });
         mBarHeight = Math.round(37.5f * mDensity * extraKeysBar.getRowCount());
+        // Keep the virtual screen height even when the bar is visible.
+        if ((mBarHeight & 1) != 0)
+            mBarHeight++;
         extraKeysBar.setFloating(mKeyboardFloating);
         extraKeysBar.setVisibility(View.GONE);
         mRoot.addView(extraKeysBar, new FrameLayout.LayoutParams(
