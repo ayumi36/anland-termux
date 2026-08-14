@@ -28,6 +28,8 @@
 
     <!-- Bind key -->
     <string name="bind_key_button">绑定虚拟键盘按键</string>
+    <string name="raise_desktop_for_soft_keyboard">软键盘弹出时抬起桌面</string>
+    <string name="raise_desktop_for_soft_keyboard_hint">开启后，桌面会缩小并向上移动，能看清正在输入的内容。</string>
     <string name="listening_countdown">正在监听…（%1$d 秒）</string>
     <string name="status_current_none">当前：无</string>
     <string name="status_current">当前：%1$s</string>
@@ -42,8 +44,6 @@
     <string name="extra_keys_hint">显示类似 Termux 的底部按键栏，包含 ESC/TAB/CTRL/ALT/方向键/PgUp 等。显示区域会缩小以腾出空间，按键栏会随软键盘一起升起。下次返回桌面视图时生效。</string>
     <string name="auto_show_switch">随软键盘自动显示扩展按键</string>
     <string name="auto_show_hint">开启时，扩展按键栏会跟随软键盘显示或隐藏。关闭时，软键盘不会改变按键栏状态；可在设置中或通过已配置的用户操作手动切换。</string>
-    <string name="keyboard_floating_switch">键盘悬浮（覆盖显示区域）</string>
-    <string name="keyboard_floating_hint">开启时，软键盘和扩展按键栏会悬浮在显示区域之上，而不是缩小显示区域；按键栏使用半透明背景并随键盘升起，但显示区域不会被调整大小。关闭时保持原有行为（显示区域缩小以腾出空间）。下次返回桌面时生效。</string>
 
     <!-- Custom layout editor -->
     <string name="btn_load_default">加载默认模板</string>

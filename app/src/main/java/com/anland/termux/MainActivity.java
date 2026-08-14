@@ -88,7 +88,7 @@ public class MainActivity extends Activity
     // shrinking it: the bar rides up with the keyboard but the surface keeps
     // its full size. See relayout() and buildExtraKeysBar().
     private static final String KEY_KEYBOARD_FLOATING = "keyboard_floating";
-    private boolean mKeyboardFloating = false;
+    private boolean mKeyboardFloating = true;
     // Persistent "tap to open Settings" notification, toggleable in Settings > General.
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
     private static final String KEY_SCREEN_ORIENTATION = "screen_orientation";
@@ -380,14 +380,26 @@ public class MainActivity extends Activity
         // the view starts GONE and a GONE view is never measured.
 
         setContentView(root);
+        // Establish a focused descendant after attachment so the DecorView routes
+        // input through the surface even while the extra-keys bar is hidden.
+        surfaceView.requestFocus();
         surfaceView.getHolder().addCallback(this);
 
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             // When the IME hides by any means (toggle, system back, or the IME's
             // own close button), release the hidden input so its focus state
             // stays in sync — otherwise reopening needs a second press.
-            if (!insets.isVisible(WindowInsets.Type.ime()))
+            // Ignore the initial hidden-inset dispatch while a show request is
+            // settling. That dispatch can arrive between requestFocus() and
+            // showSoftInput(), and disabling the target there makes the first
+            // bound-key press appear to do nothing.
+            boolean imeWasVisible = mImeBottom > 0;
+            if (!insets.isVisible(WindowInsets.Type.ime()) && imeWasVisible) {
+                View focused = getCurrentFocus();
                 systemIme.releaseHiddenInput();
+                if (focused == systemIme.getInputView() || getCurrentFocus() == null)
+                    surfaceView.requestFocus();
+            }
             applyDisplaySafeInsets(insets);
             applyImeInset(insets);
             return v.onApplyWindowInsets(insets);
@@ -591,6 +603,14 @@ public class MainActivity extends Activity
         } else {
             safeInsets = Insets.of(cutout.left, Math.max(cutout.top, roundedCornerTop),
                 cutout.right, Math.max(cutout.bottom, roundedCornerBottom));
+        }
+
+        // The raised desktop ends directly above the IME. Keeping the display's
+        // bottom safe inset there would leave a black strip between the desktop
+        // (or extra-keys bar) and the keyboard. Use this dispatch's IME state,
+        // rather than mImeBottom, because it has not been updated yet.
+        if (!mKeyboardFloating && insets.isVisible(WindowInsets.Type.ime())) {
+            safeInsets = Insets.of(safeInsets.left, safeInsets.top, safeInsets.right, 0);
         }
 
         if (mRoot.getPaddingLeft() != safeInsets.left || mRoot.getPaddingTop() != safeInsets.top
@@ -1063,6 +1083,9 @@ public class MainActivity extends Activity
             }
         });
         mBarHeight = Math.round(37.5f * mDensity * extraKeysBar.getRowCount());
+        // Keep the virtual screen height even when the bar is visible.
+        if ((mBarHeight & 1) != 0)
+            mBarHeight++;
         extraKeysBar.setFloating(mKeyboardFloating);
         extraKeysBar.setVisibility(View.GONE);
         mRoot.addView(extraKeysBar, new FrameLayout.LayoutParams(
@@ -1091,6 +1114,25 @@ public class MainActivity extends Activity
         boolean visible = extraKeysBar != null
             && extraKeysBar.getVisibility() == View.VISIBLE;
         setExtraKeysBarVisible(!visible);
+    }
+
+    /**
+     * Handle the user-bound soft-keyboard toggle in every key dispatch path.
+     * Accessibility interception runs before the Activity, so keeping this in
+     * one helper keeps the setting consistent for both routes.
+     */
+    private boolean handleSoftKeyboardToggleKey(KeyEvent event) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int boundKeycode = prefs.getInt(KEY_BOUND_KEYCODE, -1);
+        if (boundKeycode == -1 || event.getKeyCode() != boundKeycode)
+            return false;
+
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0)
+            systemIme.toggleSystemKeyboard();
+        // Consume both the press and release. Once the IME owns focus, allowing
+        // the release to continue through the normal dispatch path can send a
+        // stray key-up to Linux and leave its key state stuck.
+        return true;
     }
 
     // ---- SystemIME.Host ----
@@ -1178,13 +1220,8 @@ public class MainActivity extends Activity
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        int boundKeycode = prefs.getInt(KEY_BOUND_KEYCODE, -1);
-        if (boundKeycode != -1 && keyCode == boundKeycode) {
-            if (event.getRepeatCount() == 0)
-                systemIme.toggleSystemKeyboard();
+        if (handleSoftKeyboardToggleKey(event))
             return true;
-        }
 
         Boolean actionHandled = handleConfiguredUserAction(event);
         if (actionHandled != null)
@@ -1210,6 +1247,9 @@ public class MainActivity extends Activity
     // Called from KeyInterceptor (accessibility service) to handle keys that
     // the normal onKeyDown/onKeyUp might miss (e.g. Fn combos).
     public boolean handleAccessibilityKey(KeyEvent event) {
+        if (handleSoftKeyboardToggleKey(event))
+            return true;
+
         // Some tablet keyboard layouts expose their physical Esc key as
         // Android Back (Linux KEY_BACK / Browser Back). Convert it only on
         // the accessibility-interception path so the normal Android Back and
@@ -1282,6 +1322,9 @@ public class MainActivity extends Activity
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (handleSoftKeyboardToggleKey(event))
+            return true;
+
         Boolean actionHandled = handleConfiguredUserAction(event);
         if (actionHandled != null)
             return actionHandled || super.onKeyUp(keyCode, event);

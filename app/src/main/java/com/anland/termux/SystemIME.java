@@ -6,6 +6,7 @@ import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -24,6 +25,12 @@ import java.nio.charset.StandardCharsets;
  * to read the active bar (for modifier combos) and to report visibility changes.
  */
 public final class SystemIME {
+
+    // A newly focused view may need a few UI-loop turns before IMM considers it
+    // the served editor. Keep the retry bounded so a failed request cannot leave
+    // a permanent callback chain behind.
+    private static final int SHOW_RETRY_LIMIT = 4;
+    private static final long SHOW_RETRY_DELAY_MS = 50L;
 
     /** Callback surface SystemIME needs from its host (MainActivity). */
     public interface Host {
@@ -49,6 +56,8 @@ public final class SystemIME {
     private final Host host;
     private InputMethodManager imm;
     private EditText hiddenInput;
+    /** Incremented whenever a pending show becomes obsolete (for example, hide). */
+    private int showRequestId;
 
     SystemIME(Activity activity, Host host) {
         this.activity = activity;
@@ -355,12 +364,50 @@ public final class SystemIME {
         hiddenInput.setEnabled(false);
     }
 
+    private void retryShow(int requestId, int attempt) {
+        if (attempt >= SHOW_RETRY_LIMIT || requestId != showRequestId
+                || !hiddenInput.isEnabled())
+            return;
+        hiddenInput.postDelayed(() -> requestShow(requestId, attempt + 1),
+                SHOW_RETRY_DELAY_MS);
+    }
+
+    private void requestShow(int requestId, int attempt) {
+        if (requestId != showRequestId || !hiddenInput.isEnabled()) return;
+        if (!hiddenInput.hasFocus()) hiddenInput.requestFocus();
+
+        android.os.ResultReceiver receiver = new android.os.ResultReceiver(
+                hiddenInput.getHandler()) {
+            @Override
+            protected void onReceiveResult(int resultCode, android.os.Bundle data) {
+                if (resultCode == InputMethodManager.RESULT_UNCHANGED_HIDDEN
+                        || resultCode == InputMethodManager.RESULT_HIDDEN) {
+                    retryShow(requestId, attempt);
+                }
+            }
+        };
+
+        // The insets API is the explicit user-driven show path on Android 11+
+        // and later. Keep IMM below as a compatibility/focus-registration
+        // fallback for devices that do not hand the view a controller yet.
+        WindowInsetsController controller = hiddenInput.getWindowInsetsController();
+        if (controller == null) controller = activity.getWindow().getInsetsController();
+        if (controller != null) controller.show(WindowInsets.Type.ime());
+
+        // showSoftInput() returns false when the view has not reached IMM's
+        // served-view state. In that case ResultReceiver is not guaranteed to
+        // run, so retry from the return value as well as from a hidden result.
+        if (!imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT, receiver))
+            retryShow(requestId, attempt);
+    }
+
     // Toggle the system IME (soft keyboard). Driven by the ⌨ bar key tap and the
     // user-bound hardware keycode.
     void toggleSystemKeyboard() {
         if (imm == null) imm = activity.getSystemService(InputMethodManager.class);
         if (imm == null) return;
         if (isImeVisible()) {
+            showRequestId++;
             imm.hideSoftInputFromWindow(hiddenInput.getWindowToken(), 0);
             releaseHiddenInput();
             // In freeform mode the inset callback may not fire; hide the bar
@@ -371,7 +418,11 @@ public final class SystemIME {
             hiddenInput.setFocusable(true);
             hiddenInput.setFocusableInTouchMode(true);
             hiddenInput.requestFocus();
-            imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT);
+            // A newly focused editor is registered with IMM asynchronously, so
+            // an immediate showSoftInput() can race that registration. Post the
+            // request and retry briefly if the IME did not accept it.
+            final int requestId = ++showRequestId;
+            hiddenInput.post(() -> requestShow(requestId, 0));
             // In freeform / small-window mode the IME appears as a floating
             // window that does NOT trigger window insets, so applyImeInset()
             // is never called and the extra-keys bar stays hidden.  Show it
