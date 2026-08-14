@@ -605,6 +605,14 @@ public class MainActivity extends Activity
                 cutout.right, Math.max(cutout.bottom, roundedCornerBottom));
         }
 
+        // The raised desktop ends directly above the IME. Keeping the display's
+        // bottom safe inset there would leave a black strip between the desktop
+        // (or extra-keys bar) and the keyboard. Use this dispatch's IME state,
+        // rather than mImeBottom, because it has not been updated yet.
+        if (!mKeyboardFloating && insets.isVisible(WindowInsets.Type.ime())) {
+            safeInsets = Insets.of(safeInsets.left, safeInsets.top, safeInsets.right, 0);
+        }
+
         if (mRoot.getPaddingLeft() != safeInsets.left || mRoot.getPaddingTop() != safeInsets.top
                 || mRoot.getPaddingRight() != safeInsets.right
                 || mRoot.getPaddingBottom() != safeInsets.bottom) {
