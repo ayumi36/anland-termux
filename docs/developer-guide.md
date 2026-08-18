@@ -17,8 +17,8 @@ Based on Anland, this project connects the Android display client, the Termux da
 - `termux/anland/`: the `anland` daemon on the Termux side, which relays control messages and file descriptors between the Android display client and the Wayland producer. Its default socket is `$TMPDIR/anland/display_daemon.sock`; if `TMPDIR` is unset, it falls back to `/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock`.
 - `termux/anland/anland-compatible`: Termux-side launcher for the compatible APK. It resolves the installed APK and starts `CompatibleBridge` with `app_process`.
 - `packages/anland/`: draft Termux Packages recipe for building the daemon as a Termux package.
-- `scripts/`: Helper startup scripts for KDE Plasma and Weston in the Termux native environment and PRoot, Chroot, and LXC containers.
-- `images/`: ARM64 PRoot container image definitions for Debian 13 and Ubuntu 26.04. `images/packages.json` records download URLs for KWin, Weston, XWayland, and Mesa build artifacts.
+- `scripts/`: Helper startup scripts for KDE Plasma, GNOME, and Weston in the Termux native environment and PRoot, Chroot, and LXC containers.
+- `images/`: ARM64 PRoot container image definitions for Debian 13 and Ubuntu 26.04. `images/packages.json` records download URLs for KWin, Mutter, Weston, XWayland, and Mesa build artifacts.
 - `tools/`: local build entry points for the Android app and the Termux daemon.
 - `.github/workflows/`: GitHub Actions workflows for APKs, Debian packages, and container images.
 - `docs/`: English and Chinese user and developer documentation; Chinese files use the `_zh.md` suffix.
@@ -103,6 +103,28 @@ scripts/startweston-anland.sh
 > [!WARNING]
 > Weston’s `--debug` lets clients read debugging information and capture output, and may also allow malicious clients to block the compositor. Enable it only in trusted local debugging sessions, and disable it when debugging is complete.
 
+#### GNOME
+
+Script: `scripts/startgnome-anland.sh`
+
+- `ANLAND_GNOME_DEBUG=1`: prints GNOME Shell, `gnome-session`, `gnome-session-service`, and Termux XSettings logs to the current terminal instead of redirecting them to files. The default is `0`.
+- `ANLAND_AUDIO_DEBUG=1`: enables verbose PipeWire, `pipewire-pulse`, and WirePlumber logs.
+- `ANLAND_GNOME_XWAYLAND=0`: disables XWayland. The default is `1`; use this for a Wayland-only GNOME session.
+- `GNOME_WAYLAND_DISPLAY=<socket name>`: changes the Wayland socket name. The default is `wayland-anland`.
+- `ANLAND_SOCKET=<path>`: overrides the Anland display-daemon socket path.
+- `ANLAND_LOG_DIR=<directory>`: changes the directory for GNOME session, XSettings, D-Bus, and audio logs. The default is `$XDG_RUNTIME_DIR/anland-logs`.
+
+The helper starts GNOME through `dbus-run-session`, prepares an Anland GNOME session definition, starts a private compatibility system bus when the container system bus is unavailable, and falls back to a standalone GNOME session service when a user systemd manager is not available. In Termux native sessions it starts the XSettings service after Mutter publishes the XWayland environment so X11 applications can receive the correct scaling information.
+
+For example, to start GNOME with session and audio logs in the terminal:
+
+```sh
+ANLAND_GNOME_DEBUG=1 \
+ANLAND_AUDIO_DEBUG=1 \
+ANLAND_LOG_DIR=/tmp/anland-gnome-logs \
+scripts/startgnome-anland.sh
+```
+
 ### KWin
 
 KWin uses Qt logging categories. When using the helper startup script, you must also set `ANLAND_PLASMA_DEBUG=1`; otherwise, the script discards KWin’s standard output and standard error.
@@ -120,6 +142,26 @@ ANLAND_PLASMA_DEBUG=1 \
 KWIN_GL_DEBUG=1 \
 QT_LOGGING_RULES='kwin_core.debug=true;kwin_backend_anland.debug=true;kwin_scene_opengl.debug=true' \
 scripts/startplasma-anland.sh 2>&1 | tee kwin-anland.log
+```
+
+### Mutter
+
+Mutter is the GNOME compositor started by `gnome-shell` in the Anland session. The GNOME helper passes the Anland-specific `--anland`, `--anland-socket`, and `--wayland-display` options to GNOME Shell, which starts Mutter with the Anland backend. Use `ANLAND_GNOME_DEBUG=1` when debugging so GNOME Shell and Mutter output is not redirected to log files.
+
+- `MUTTER_DEBUG=<topics>`: enables Mutter debug topics. Useful topics include `backend`, `render`, `wayland`, `input`, `kms`, `screen-cast`, `remote-desktop`, `x11`, and `startup`; multiple topics are comma-separated.
+- `MUTTER_DEBUG_PAINT=<topics>`: enables paint diagnostics such as `opaque-region`, `disable-direct-scanout`, and `sync-cursor-primary`.
+- `MUTTER_VERBOSE=1`: enables verbose Mutter logging when the build includes verbose-mode support.
+- `COGL_DEBUG=show-source,performance`: enables Cogl graphics diagnostics, including shader-source and performance output. Use only the topics needed for the issue.
+- `G_DEBUG=fatal-warnings,fatal-criticals`: makes GLib warnings and critical messages stop the process, which is useful when attaching GDB but can terminate the desktop session.
+
+GNOME Shell also includes Looking Glass. Press `Alt+F2`, enter `lg`, and use it to inspect Mutter state, enable debug topics at runtime, show damage, or run GNOME Shell JavaScript. This is usually more convenient than restarting the entire session for a small compositor or shell investigation.
+
+For example, to inspect Anland backend, rendering, and Wayland initialization:
+
+```sh
+ANLAND_GNOME_DEBUG=1 \
+MUTTER_DEBUG=backend,render,wayland \
+scripts/startgnome-anland.sh 2>&1 | tee mutter-anland.log
 ```
 
 ### Weston
@@ -284,6 +326,24 @@ gbp buildpackage -uc -us -jauto --git-ignore-branch --git-no-pristine-tar
 
 Related Termux package pull request: https://github.com/lfdevs/termux-packages/pull/14
 
+### Mutter
+
+- Repository: https://github.com/lfdevs/mutter
+- Debian branch: `debian/trixie`
+- Ubuntu branch: `ubuntu/resolute-updates`
+
+After checking out the appropriate branch in a Linux container for the corresponding distribution, use `gbp buildpackage` to build the Debian package:
+
+```sh
+sudo apt update
+sudo apt build-dep -y mutter
+sudo apt install -y git ccache build-essential devscripts fakeroot quilt git-buildpackage pristine-tar
+origtargz
+gbp buildpackage -uc -us -jauto --git-ignore-branch --git-no-pristine-tar
+```
+
+Related Termux package pull request: https://github.com/lfdevs/termux-packages/pull/21
+
 ### Mesa
 
 - Repository: https://github.com/lfdevs/mesa-for-android-container
@@ -295,7 +355,7 @@ Related Termux package pull request: https://github.com/termux/termux-packages/p
 
 ## GitHub Actions
 
-The repository provides six workflows in [`.github/workflows/`](../.github/workflows/). Packages and container images target ARM64. The packages, APKs, checksums, and container images produced by the workflows are for releases and subsequent integration verification; they do not replace runtime tests of display, input, audio, and other behavior on a physical Android device.
+The repository provides seven workflows in [`.github/workflows/`](../.github/workflows/). Packages and container images target ARM64. The packages, APKs, checksums, and container images produced by the workflows are for releases and subsequent integration verification; they do not replace runtime tests of display, input, audio, and other behavior on a physical Android device.
 
 > [!NOTE]
 > The `tag` used by package-build workflows (referred to below as TAG) is passed directly to `git clone -b`. Workflows do not verify whether a TAG belongs to the selected distribution, nor do they automatically replace the default TAG in the input field when the distribution changes.
@@ -304,6 +364,7 @@ The repository provides six workflows in [`.github/workflows/`](../.github/workf
 >
 > - For `Debian 13` (trixie), XWayland, KWin, and Weston must use TAGs created from the `debian-unstable` branch.
 > - For `Ubuntu 26.04` (resolute), they must use TAGs created from the `ubuntu/resolute` branch.
+> - For Mutter, Debian 13 must use TAGs created from `debian/trixie`, while Ubuntu 26.04 must use TAGs created from `ubuntu/resolute-updates`.
 > - A mismatched TAG can build a package for one distribution with the build dependencies of another, causing the build to fail or producing a package that cannot be used in the target image.
 > - The default TAGs displayed by the workflows are examples for convenience only. Before triggering a build, confirm the actual TAG to build in the corresponding source repository.
 
@@ -328,19 +389,19 @@ The build environment is fixed to JDK 21, Gradle 9.6.0, and Android NDK 29.0.142
 
 Workflow file: [`build-images.yml`](../.github/workflows/build-images.yml)
 
-Combines Dockerfiles in this repository with the KWin or Weston, XWayland, and Mesa ARM64 build artifacts recorded in `images/packages.json`, then builds and pushes PRoot container images to GHCR. It also generates build provenance for image digests.
+Combines Dockerfiles in this repository with the KWin, Mutter, or Weston, XWayland, and Mesa ARM64 build artifacts recorded in `images/packages.json`, then builds and pushes PRoot container images to GHCR. It also generates build provenance for image digests.
 
 This workflow is manual only. Its inputs are:
 
 - `distribution`: required Linux distribution; either `Debian 13` or `Ubuntu 26.04`. The default is `Ubuntu 26.04`.
-- `desktop`: required desktop environment; either `KDE Plasma` or `Weston`. The default is `KDE Plasma`.
+- `desktop`: required desktop environment; `KDE Plasma`, `GNOME`, or `Weston`. The default is `KDE Plasma`.
 
 Distribution, Dockerfile, and image-TAG mappings:
 
-| Distribution | Codename | KDE Plasma Dockerfile / TAG | Weston Dockerfile / TAG |
-| --- | --- | --- | --- |
-| Debian 13 | `trixie` | `images/debian-plasma.Dockerfile` / `trixie-anland-plasma` | `images/debian-weston.Dockerfile` / `trixie-anland-weston` |
-| Ubuntu 26.04 | `resolute` | `images/ubuntu-plasma.Dockerfile` / `resolute-anland-plasma` | `images/ubuntu-weston.Dockerfile` / `resolute-anland-weston` |
+| Distribution | Codename | KDE Plasma Dockerfile / TAG | GNOME Dockerfile / TAG | Weston Dockerfile / TAG |
+| --- | --- | --- | --- | --- |
+| Debian 13 | `trixie` | `images/debian-plasma.Dockerfile` / `trixie-anland-plasma` | `images/debian-gnome.Dockerfile` / `trixie-anland-gnome` | `images/debian-weston.Dockerfile` / `trixie-anland-weston` |
+| Ubuntu 26.04 | `resolute` | `images/ubuntu-plasma.Dockerfile` / `resolute-anland-plasma` | `images/ubuntu-gnome.Dockerfile` / `resolute-anland-gnome` | `images/ubuntu-weston.Dockerfile` / `resolute-anland-weston` |
 
 The final image name is `ghcr.io/<repository owner>/debian:<TAG>` or `ghcr.io/<repository owner>/ubuntu:<TAG>`. This workflow has no manual TAG input; the image TAG is generated automatically from the selected distribution and desktop environment.
 
@@ -369,6 +430,19 @@ This workflow is manual only. Its inputs are:
 - `tag`: required. The default, `anland-5.8-4_6.6.4-0ubuntu92`, is for Ubuntu 26.04. When selecting Debian 13, you must replace it with a KWin Debian TAG.
 
 The workflow installs KWin build dependencies in the selected distribution environment, builds with `gbp buildpackage`, and uses ccache to speed up subsequent runs.
+
+### Build Mutter Packages
+
+Workflow file: [`build-mutter.yml`](../.github/workflows/build-mutter.yml)
+
+Builds Mutter ARM64 Debian packages from a specified TAG in <https://github.com/lfdevs/mutter>. It removes development, debug-symbol, and test packages, then uploads the `.deb` files and `sha256sums.txt`, which are retained for 90 days.
+
+This workflow is manual only. Its inputs are:
+
+- `distribution`: required; either `Debian 13` or `Ubuntu 26.04`. The default is `Debian 13`.
+- `tag`: required. The default, `anland-5.13-debian-48.7-90`, is for Debian 13. When selecting Ubuntu 26.04, you must replace it with a Mutter TAG from `ubuntu/resolute-updates`.
+
+The workflow builds inside a Debian trixie or Ubuntu resolute container, uses ccache, and invokes `gbp buildpackage` with a ccache-aware `debuild` builder.
 
 ### Build Weston Packages
 

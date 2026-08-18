@@ -17,8 +17,8 @@
 - `termux/anland/`：Termux 侧的 `anland` 守护程序，在 Android 显示端与 Wayland 生产端之间中继控制消息和文件描述符。默认套接字为 `$TMPDIR/anland/display_daemon.sock`；`TMPDIR` 未设置时回退到 `/data/data/com.termux/files/usr/tmp/anland/display_daemon.sock`。
 - `termux/anland/anland-compatible`：compatible APK 的 Termux 侧启动脚本，通过 `app_process` 从已安装的 APK 启动 `CompatibleBridge`。
 - `packages/anland/`：Termux Packages 配方草稿，用于将守护程序构建为 Termux 软件包。
-- `scripts/`：Termux 原生环境及 PRoot、Chroot、LXC 容器中的 KDE Plasma 和 Weston 一键启动脚本。
-- `images/`：Debian 13 和 Ubuntu 26.04 的 ARM64 PRoot 容器镜像定义；`images/packages.json` 记录 KWin、Weston、XWayland 和 Mesa 构建产物的下载地址。
+- `scripts/`：Termux 原生环境及 PRoot、Chroot、LXC 容器中的 KDE Plasma、GNOME 和 Weston 一键启动脚本。
+- `images/`：Debian 13 和 Ubuntu 26.04 的 ARM64 PRoot 容器镜像定义；`images/packages.json` 记录 KWin、Mutter、Weston、XWayland 和 Mesa 构建产物的下载地址。
 - `tools/`：Android 应用和 Termux 守护程序的本地构建入口。
 - `.github/workflows/`：APK、Debian 软件包及容器镜像的 GitHub Actions 工作流。
 - `docs/`：中英文用户文档和开发者文档；中文文件使用 `_zh.md` 后缀。
@@ -90,6 +90,28 @@ scripts/startweston-anland.sh
 > [!WARNING]
 > Weston 的 `--debug` 会允许客户端读取调试信息和截取输出内容，也可能被恶意客户端用于阻塞合成器。只应在可信的本地调试会话中启用，调试结束后应关闭。
 
+#### GNOME
+
+脚本：`scripts/startgnome-anland.sh`
+
+- `ANLAND_GNOME_DEBUG=1`：将 GNOME Shell、`gnome-session`、`gnome-session-service` 和 Termux XSettings 日志输出到当前终端，而不是重定向到文件。默认值为 `0`。
+- `ANLAND_AUDIO_DEBUG=1`：为 PipeWire、`pipewire-pulse` 和 WirePlumber 启用详细日志。
+- `ANLAND_GNOME_XWAYLAND=0`：禁用 XWayland；默认值为 `1`，可用于只运行 Wayland 的 GNOME 会话。
+- `GNOME_WAYLAND_DISPLAY=<Socket 名称>`：修改 Wayland Socket 名称，默认值为 `wayland-anland`。
+- `ANLAND_SOCKET=<路径>`：覆盖 Anland 显示守护程序的 Socket 路径。
+- `ANLAND_LOG_DIR=<目录>`：修改 GNOME 会话、XSettings、D-Bus 和音频日志目录，默认值为 `$XDG_RUNTIME_DIR/anland-logs`。
+
+该脚本通过 `dbus-run-session` 启动 GNOME，准备 Anland GNOME 会话定义；当容器系统 D-Bus 不可用时启动私有兼容系统总线；当用户 systemd 管理器不可用时回退到独立的 GNOME 会话服务。在 Termux 原生会话中，脚本会等待 Mutter 发布 XWayland 环境后再启动 XSettings 服务，使 X11 应用获得正确的缩放信息。
+
+例如，在终端中直接查看 GNOME 会话和音频日志：
+
+```sh
+ANLAND_GNOME_DEBUG=1 \
+ANLAND_AUDIO_DEBUG=1 \
+ANLAND_LOG_DIR=/tmp/anland-gnome-logs \
+scripts/startgnome-anland.sh
+```
+
 ### KWin
 
 KWin 使用 Qt 日志分类。使用一键脚本时必须同时设置 `ANLAND_PLASMA_DEBUG=1`，否则启动脚本会丢弃 KWin 的标准输出和标准错误。
@@ -107,6 +129,26 @@ ANLAND_PLASMA_DEBUG=1 \
 KWIN_GL_DEBUG=1 \
 QT_LOGGING_RULES='kwin_core.debug=true;kwin_backend_anland.debug=true;kwin_scene_opengl.debug=true' \
 scripts/startplasma-anland.sh 2>&1 | tee kwin-anland.log
+```
+
+### Mutter
+
+Mutter 是 GNOME 会话中的合成器，由 `gnome-shell` 启动。GNOME 一键脚本会向 GNOME Shell 传递 Anland 专用的 `--anland`、`--anland-socket` 和 `--wayland-display` 参数，使 Mutter 使用 Anland 后端。调试时应设置 `ANLAND_GNOME_DEBUG=1`，否则 GNOME Shell 和 Mutter 输出会被重定向到日志文件。
+
+- `MUTTER_DEBUG=<主题列表>`：启用 Mutter 调试主题。常用主题包括 `backend`、`render`、`wayland`、`input`、`kms`、`screen-cast`、`remote-desktop`、`x11` 和 `startup`，多个主题以逗号分隔。
+- `MUTTER_DEBUG_PAINT=<主题列表>`：启用绘制诊断，例如 `opaque-region`、`disable-direct-scanout` 和 `sync-cursor-primary`。
+- `MUTTER_VERBOSE=1`：在构建启用了 verbose mode 时启用详细的 Mutter 日志。
+- `COGL_DEBUG=show-source,performance`：启用 Cogl 图形诊断，包括 Shader 源码和性能输出；应只启用定位问题所需的主题。
+- `G_DEBUG=fatal-warnings,fatal-criticals`：让 GLib warning 和 critical 消息终止进程，适合附加 GDB，但可能直接终止桌面会话。
+
+GNOME Shell 还内置 Looking Glass。按 `Alt+F2`，输入 `lg` 后，可以查看 Mutter 状态、在运行时启用调试主题、显示 damage 或执行 GNOME Shell JavaScript。对于小范围的合成器或 Shell 问题，通常无需重启整个会话。
+
+例如，查看 Anland 后端、渲染和 Wayland 初始化日志：
+
+```sh
+ANLAND_GNOME_DEBUG=1 \
+MUTTER_DEBUG=backend,render,wayland \
+scripts/startgnome-anland.sh 2>&1 | tee mutter-anland.log
 ```
 
 ### Weston
@@ -269,6 +311,24 @@ gbp buildpackage -uc -us -jauto --git-ignore-branch --git-no-pristine-tar
 
 Termux 软件包关联的 Pull request：https://github.com/lfdevs/termux-packages/pull/14
 
+### Mutter
+
+- 仓库：https://github.com/lfdevs/mutter
+- Debian 分支：`debian/trixie`
+- Ubuntu 分支：`ubuntu/resolute-updates`
+
+在对应发行版的 Linux 容器内检出相应分支后，使用 `gbp buildpackage` 构建 Debian 软件包：
+
+```sh
+sudo apt update
+sudo apt build-dep -y mutter
+sudo apt install -y git ccache build-essential devscripts fakeroot quilt git-buildpackage pristine-tar
+origtargz
+gbp buildpackage -uc -us -jauto --git-ignore-branch --git-no-pristine-tar
+```
+
+Termux 软件包关联的 Pull request：https://github.com/lfdevs/termux-packages/pull/21
+
 ### Mesa
 
 - 仓库：https://github.com/lfdevs/mesa-for-android-container
@@ -280,7 +340,7 @@ Termux 软件包关联的 Pull requests：https://github.com/termux/termux-packa
 
 ## GitHub Actions
 
-仓库在 [`.github/workflows/`](../.github/workflows/) 中提供 6 条工作流。软件包和容器镜像均面向 ARM64；工作流生成的软件包、APK、校验和或容器镜像用于发布和后续集成验证，不能替代 Android 实机上的显示、输入、音频等运行时测试。
+仓库在 [`.github/workflows/`](../.github/workflows/) 中提供 7 条工作流。软件包和容器镜像均面向 ARM64；工作流生成的软件包、APK、校验和或容器镜像用于发布和后续集成验证，不能替代 Android 实机上的显示、输入、音频等运行时测试。
 
 > [!NOTE]
 > 软件包构建工作流的 `tag`（下文写作 TAG）会直接传给 `git clone -b`，工作流不会自动检查该 TAG 是否属于所选发行版，也不会在切换发行版时自动替换输入框中的默认 TAG。
@@ -289,6 +349,7 @@ Termux 软件包关联的 Pull requests：https://github.com/termux/termux-packa
 >
 > - 选择 `Debian 13`（trixie）时，XWayland、KWin 和 Weston 应使用从 `debian-unstable` 分支创建的 TAG。
 > - 选择 `Ubuntu 26.04`（resolute）时，应使用从 `ubuntu/resolute` 分支创建的 TAG。
+> - 对于 Mutter，Debian 13 应使用从 `debian/trixie` 创建的 TAG，Ubuntu 26.04 应使用从 `ubuntu/resolute-updates` 创建的 TAG。
 > - TAG 不匹配时，可能在错误发行版的构建依赖中编译另一发行版的软件包，导致构建失败，或生成不能用于目标镜像的软件包。
 > - 工作流中显示的 TAG 默认值只是便于填写的示例。触发构建前应到对应源码仓库确认实际需要构建的 TAG。
 
@@ -313,19 +374,19 @@ Termux 软件包关联的 Pull requests：https://github.com/termux/termux-packa
 
 工作流文件：[`build-images.yml`](../.github/workflows/build-images.yml)
 
-用于组合当前仓库中的 Dockerfile 与 `images/packages.json` 记录的 KWin 或 Weston、XWayland、Mesa ARM64 构建产物，构建并推送 PRoot 容器镜像到 GHCR，同时为镜像摘要生成构建来源证明。
+用于组合当前仓库中的 Dockerfile 与 `images/packages.json` 记录的 KWin、Mutter 或 Weston、XWayland、Mesa ARM64 构建产物，构建并推送 PRoot 容器镜像到 GHCR，同时为镜像摘要生成构建来源证明。
 
 仅支持手动触发，输入选项如下：
 
 - `distribution`：必填，Linux 发行版；可选 `Debian 13`、`Ubuntu 26.04`，默认 `Ubuntu 26.04`。
-- `desktop`：必填，桌面环境；可选 `KDE Plasma`、`Weston`，默认 `KDE Plasma`。
+- `desktop`：必填，桌面环境；可选 `KDE Plasma`、`GNOME`、`Weston`，默认 `KDE Plasma`。
 
 发行版、Dockerfile 与镜像 TAG 的映射如下：
 
-| 发行版 | 发行版代号 | KDE Plasma Dockerfile / TAG | Weston Dockerfile / TAG |
-| --- | --- | --- | --- |
-| Debian 13 | `trixie` | `images/debian-plasma.Dockerfile` / `trixie-anland-plasma` | `images/debian-weston.Dockerfile` / `trixie-anland-weston` |
-| Ubuntu 26.04 | `resolute` | `images/ubuntu-plasma.Dockerfile` / `resolute-anland-plasma` | `images/ubuntu-weston.Dockerfile` / `resolute-anland-weston` |
+| 发行版 | 发行版代号 | KDE Plasma Dockerfile / TAG | GNOME Dockerfile / TAG | Weston Dockerfile / TAG |
+| --- | --- | --- | --- | --- |
+| Debian 13 | `trixie` | `images/debian-plasma.Dockerfile` / `trixie-anland-plasma` | `images/debian-gnome.Dockerfile` / `trixie-anland-gnome` | `images/debian-weston.Dockerfile` / `trixie-anland-weston` |
+| Ubuntu 26.04 | `resolute` | `images/ubuntu-plasma.Dockerfile` / `resolute-anland-plasma` | `images/ubuntu-gnome.Dockerfile` / `resolute-anland-gnome` | `images/ubuntu-weston.Dockerfile` / `resolute-anland-weston` |
 
 最终镜像名称为 `ghcr.io/<仓库所有者>/debian:<TAG>` 或 `ghcr.io/<仓库所有者>/ubuntu:<TAG>`。这条工作流没有手动 TAG 输入；镜像 TAG 由所选发行版和桌面环境自动生成。
 
@@ -354,6 +415,19 @@ Termux 软件包关联的 Pull requests：https://github.com/termux/termux-packa
 - `tag`：必填；默认 `anland-5.8-4_6.6.4-0ubuntu92`，该默认值对应 Ubuntu 26.04。选择 Debian 13 时必须改为 KWin 的 Debian TAG。
 
 工作流在所选发行版环境中安装 KWin 构建依赖，使用 `gbp buildpackage` 构建，并通过 ccache 加速后续运行。
+
+### Build Mutter Packages
+
+工作流文件：[`build-mutter.yml`](../.github/workflows/build-mutter.yml)
+
+用于从 <https://github.com/lfdevs/mutter> 的指定 TAG 构建 Mutter ARM64 Debian 软件包，移除开发包、调试符号包和测试包后，上传 `.deb` 文件及 `sha256sums.txt`，保留 90 天。
+
+仅支持手动触发，输入选项如下：
+
+- `distribution`：必填；可选 `Debian 13`、`Ubuntu 26.04`，默认 `Debian 13`。
+- `tag`：必填；默认 `anland-5.13-debian-48.7-90`，该默认值对应 Debian 13。选择 Ubuntu 26.04 时必须改为 Mutter 的 `ubuntu/resolute-updates` TAG。
+
+工作流在 Debian trixie 或 Ubuntu resolute 容器中构建，使用 ccache，并通过带 ccache 配置的 `debuild` 构建器调用 `gbp buildpackage`。
 
 ### Build Weston Packages
 

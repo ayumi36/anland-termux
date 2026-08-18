@@ -32,21 +32,23 @@ echo $TERMUX_APP__APK_RELEASE
 | Android Display App (Compatible) | `AnlandTermux-5.13.3-compatible.apk` |
 | Termux Daemon | `anland_5.13.3_aarch64.deb` |
 
-| | XWayland | KWin | Weston |
-| :---: | --- | --- | --- |
-| Termux Native | `xwayland_24.1.12-2_aarch64.deb` | `kwin-anland_6.7.2_aarch64.deb` | `weston_14.0.2-3_aarch64.deb` |
-| Ubuntu 26.04 | `xwayland_24.1.10-91_arm64.deb` | `kwin_anland-5.8-4_6.6.4-0ubuntu92.zip` | `weston_anland-5.13-ubuntu-14.0.2-92.zip` |
-| Debian 13 | `xwayland_24.1.6-91_arm64.deb` | `kwin_anland-5.8-debian-4_6.3.6-92.zip` | `weston_anland-5.13-debian-14.0.2-92.zip` |
+| | XWayland | KWin | Weston | Mutter |
+| :---: | --- | --- | --- | --- |
+| Termux Native | `xwayland_24.1.12-2_aarch64.deb` | `kwin-anland_6.7.4_aarch64.deb` | `weston_14.0.2-3_aarch64.deb` | `mutter_gnome_49.3_aarch64.zip` |
+| Ubuntu 26.04 | `xwayland_24.1.10-91_arm64.deb` | `kwin_anland-5.13-4_6.6.4-0ubuntu95.zip` | `weston_anland-5.13-ubuntu-14.0.2-92.zip` | `mutter_anland-5.13-50.1-0ubuntu91.zip` |
+| Debian 13 | `xwayland_24.1.6-91_arm64.deb` | `kwin_anland-5.13-debian-4_6.3.6-95.zip` | `weston_anland-5.13-debian-14.0.2-92.zip` | `mutter_anland-5.13-debian-48.7-91.zip` |
 
-“Android Display App”和“Termux Daemon”是必需的。请先按上表选择显示 APK，再根据实际运行环境选择“XWayland”、“Weston”和“KWin”的版本。
+“Android Display App”和“Termux Daemon”是必需的。请先按上表选择显示 APK，再根据实际运行环境选择“XWayland”、“KWin”、“Weston”和“Mutter”的版本。
 
-例如，在 Debian 13 的 PRoot 容器中使用 F-Droid Termux 运行 Anland: Termux 和 KDE Plasma，需要下载 `AnlandTermux-5.13.3-compatible.apk`、`anland_5.13.3_aarch64.deb`、`xwayland_24.1.6-91_arm64.deb` 和 `kwin_anland-5.8-debian-4_6.3.6-92.zip` 四个文件。
+例如，在 Debian 13 的 PRoot 容器中使用 F-Droid Termux 运行 Anland: Termux 和 KDE Plasma，需要下载 `AnlandTermux-5.13.3-compatible.apk`、`anland_5.13.3_aarch64.deb`、`xwayland_24.1.6-91_arm64.deb` 和 `kwin_anland-5.13-debian-4_6.3.6-95.zip` 四个文件。
 
 又如，在 Ubuntu 26.04 的 Chroot 容器中使用 GitHub Termux 运行 Anland: Termux 和 Weston，需要下载 `AnlandTermux-5.13.3.apk`、`anland_5.13.3_aarch64.deb`、`xwayland_24.1.10-91_arm64.deb` 和 `weston_anland-5.13-ubuntu-14.0.2-92.zip` 四个文件。
 
+再如，在 Termux 原生环境使用 GitHub Termux 运行 Anland: Termux 和 GNOME，需要下载 `AnlandTermux-5.13.3.apk`、`anland_5.13.3_aarch64.deb`、`xwayland_24.1.12-2_aarch64.deb` 和 `mutter_gnome_49.3_aarch64.zip` 四个文件。
+
 ## 安装
 
-1. 在 Android 安装显示应用：GitHub Termux 使用 `AnlandTermux-5.13.3.apk`，F-Droid Termux 使用 `AnlandTermux-5.13.3-compatible.apk`。安装完成后，可以**长按应用图标**，进入设置界面。
+1. 在 Android 安装显示应用：GitHub Termux 使用 `AnlandTermux-5.13.3.apk`，F-Droid Termux 使用 `AnlandTermux-5.13.3-compatible.apk`。安装完成后，可以**长按应用图标**，进入设置界面，按照你的偏好调整各项设置。
 
 2. 在 Termux 安装守护程序，如 `anland_5.13.3_aarch64.deb`。
 
@@ -67,9 +69,13 @@ echo $TERMUX_APP__APK_RELEASE
 > proot-distro install ghcr.io/lfdevs/debian:trixie-anland-weston --name debian-anland-weston
 > # 使用 Ubuntu 26.04 的 Weston：
 > proot-distro install ghcr.io/lfdevs/ubuntu:resolute-anland-weston --name ubuntu-anland-weston
+> # 使用 Debian 13 的 GNOME：
+> proot-distro install ghcr.io/lfdevs/debian:trixie-anland-gnome --name debian-anland-gnome
+> # 使用 Ubuntu 26.04 的 GNOME：
+> proot-distro install ghcr.io/lfdevs/ubuntu:resolute-anland-gnome --name ubuntu-anland-gnome
 > ```
 >
-> 使用方法如下。它将会启动 KDE Plasma 或 Weston，然后请切换到 Android 的“Anland Termux”应用。命令中的环境变量 `ANLAND_WESTON_SCALE` 为 Weston 的缩放倍数，请根据实际需要设置为整数。
+> 使用方法如下。它将会启动 KDE Plasma、Weston 或 GNOME，然后请切换到 Android 的“Anland Termux”应用。命令中的环境变量 `ANLAND_WESTON_SCALE` 为 Weston 的缩放倍数，请根据实际需要设置为整数。
 >
 > ```sh
 > # 启动守护程序：
@@ -84,21 +90,34 @@ echo $TERMUX_APP__APK_RELEASE
 > proot-distro login debian-anland-weston --shared-tmp -- bash -c "ANLAND_WESTON_SCALE=2 startweston-anland"
 > # 使用 Ubuntu 26.04 的 Weston：
 > proot-distro login ubuntu-anland-weston --shared-tmp -- bash -c "ANLAND_WESTON_SCALE=2 startweston-anland"
+> # 使用 Debian 13 的 GNOME：
+> proot-distro login debian-anland-gnome --shared-tmp -- bash -c "startgnome-anland"
+> # 使用 Ubuntu 26.04 的 GNOME：
+> proot-distro login ubuntu-anland-gnome --shared-tmp -- bash -c "startgnome-anland"
 > ```
 
-3. 在实际运行环境中完成 KDE Plasma 或 Weston 的安装后，使用软件包管理器安装本项目的 XWayland，然后根据你的需要安装本项目的 KWin 或 Weston。**如果是 `.zip` 格式的压缩包，则需要先解压才能得到实际的安装包。**
+3. 在实际运行环境中完成 KDE Plasma、Weston 或 GNOME 的安装后，使用软件包管理器安装本项目的 XWayland，然后根据你的需要安装本项目的 KWin、Weston 或 Mutter。**如果是 `.zip` 格式的压缩包，则需要先解压才能得到实际的安装包。**
 
    比如，在 Termux Native 中安装 XWayland 和 KWin：
 
    ```sh
-   pkg reinstall ./kwin-anland_6.7.2_aarch64.deb ./xwayland_24.1.12-2_aarch64.deb
+   pkg reinstall ./xwayland_24.1.12-2_aarch64.deb ./kwin-anland_6.7.4_aarch64.deb
+   ```
+
+   又如，在 Termux Native 中安装 XWayland 和 Mutter：
+
+   ```sh
+   pkg reinstall ./xwayland_24.1.12-2_aarch64.deb
+   unzip mutter_gnome_49.3_aarch64.zip -d gnome-debs-install/
+   pkg reinstall ./gnome-debs-install/*.deb
+   rm -rf gnome-debs-install/
    ```
 
    又如，在 Debian 13 容器中安装 XWayland 和 KWin：
 
    ```sh
    sudo apt reinstall ./xwayland_24.1.6-91_arm64.deb
-   unzip kwin_anland-5.8-debian-4_6.3.6-92.zip -d kwin-debs-install/
+   unzip kwin_anland-5.13-debian-4_6.3.6-95.zip -d kwin-debs-install/
    sudo apt reinstall ./kwin-debs-install/*.deb
    rm -rf kwin-debs-install/
    ```
@@ -113,9 +132,9 @@ echo $TERMUX_APP__APK_RELEASE
    ```
 
 > [!NOTE]
-> 在 Termux Native 中使用 KDE Plasma Wayland，还需额外安装修改版的 LayerShellQt：<https://github.com/lfdevs/termux-packages/releases/tag/layer-shell-qt_6.7.3-1>
 >
-> 建议同时安装 [Termux API](https://github.com/termux/termux-api)，它将提高在 Termux Native 中使用 KDE Plasma Wayland 的稳定性。
+> * 建议额外安装 [Termux API](https://github.com/termux/termux-api)，它将提高在 Termux Native 和 PRoot 容器中运行桌面的稳定性。
+> * 在 Termux Native 中运行 KDE Plasma Wayland，还需额外安装修改版的 LayerShellQt：<https://github.com/lfdevs/termux-packages/releases/tag/layer-shell-qt_6.7.4-1>
 
 4. 在实际运行环境中安装 Freedreno (KGSL) 驱动。
 
@@ -123,18 +142,18 @@ echo $TERMUX_APP__APK_RELEASE
 
    对于 Linux 容器，请按照该页面的说明进行安装：<https://github.com/lfdevs/mesa-for-android-container/releases/latest>
   
-5. 锁定 XWayland、KWin、Weston 和 Mesa 软件包的版本，避免其受到更新的影响。
+5. 锁定 XWayland、KWin、Weston、Mutter 和 Mesa 等软件包的版本，避免其受到更新的影响。
 
    比如在 Termux Native 中：
 
    ```sh
-   apt-mark hold xwayland weston mesa mesa-vulkan-icd-freedreno
+   apt-mark hold xwayland mesa mesa-vulkan-icd-freedreno weston layer-shell-qt mutter libical spidermonkey
    ```
 
    又如在 Debian 13 或 Ubuntu 26.04 容器中：
 
    ```sh
-   sudo apt-mark hold xwayland kwin-common kwin-data kwin-wayland libkwin6 weston libweston-14-0 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers
+   sudo apt-mark hold xwayland libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers weston libweston-* kwin-common kwin-data kwin-wayland libkwin6 gir1.2-mutter-* libmutter-* mutter mutter-common mutter-common-bin
    ```
 
 > [!TIP]
@@ -143,7 +162,7 @@ echo $TERMUX_APP__APK_RELEASE
 > 比如在 Termux Native 中，添加文件 `$PREFIX/etc/apt/preferences.d/hold-anland-package`：
 >
 > ```text
-> Package: xwayland mesa mesa-vulkan-icd-freedreno weston layer-shell-qt
+> Package: xwayland mesa mesa-vulkan-icd-freedreno weston layer-shell-qt mutter libical spidermonkey
 > Pin: release *
 > Pin-Priority: -1
 > ```
@@ -151,10 +170,12 @@ echo $TERMUX_APP__APK_RELEASE
 > 又如在 Debian 13 或 Ubuntu 26.04 容器中，添加文件 `/etc/apt/preferences.d/hold-anland-package`：
 >
 > ```text
-> Package: xwayland kwin-common kwin-data kwin-wayland libkwin6 libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers weston libweston-*
+> Package: xwayland libegl-mesa0 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium mesa-vulkan-drivers weston libweston-* kwin-common kwin-data kwin-wayland libkwin6 gir1.2-mutter-* libmutter-* mutter mutter-common mutter-common-bin
 > Pin: release *
 > Pin-Priority: -1
 > ```
+>
+> 如果后续遇到安装或更新其他软件包失败的问题，可以执行 `apt-mark unhold <包名>` 命令并删除 `hold-anland-package` 配置文件以解除版本锁定。
 
 ## 使用
 
@@ -195,6 +216,14 @@ echo $TERMUX_APP__APK_RELEASE
    curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startweston-anland.sh
    chmod +x ./startweston-anland.sh
    ./startweston-anland.sh
+   ```
+
+   GNOME：[startgnome-anland.sh](../scripts/startgnome-anland.sh)
+
+   ```sh
+   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startgnome-anland.sh
+   chmod +x ./startgnome-anland.sh
+   ./startgnome-anland.sh
    ```
 
 4. 切换到 Android 的“Anland Termux”应用，开始享受 Wayland 桌面。
