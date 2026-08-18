@@ -18,6 +18,7 @@ on:
         type: choice
         options:
           - KDE Plasma
+          - GNOME
           - Weston
 
 env:
@@ -72,6 +73,11 @@ jobs:
               desktop_variant=weston
               desktop_package=weston
               desktop_url_arg=WESTON_URL
+              ;;
+            GNOME)
+              desktop_variant=gnome
+              desktop_package=mutter
+              desktop_url_arg=MUTTER_URL
               ;;
             *)
               echo "Unsupported desktop environment: $DESKTOP" >&2
