@@ -1,49 +1,4 @@
 {
-  "kwin": {
-    "description": "KDE window manager, Wayland version",
-    "distributions": {
-      "debian": {
-        "trixie": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/kwin_anland-5.13-debian-4_6.3.6-93.zip"
-        }
-      },
-      "ubuntu": {
-        "resolute": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/kwin_anland-5.13-4_6.6.4-0ubuntu93.zip"
-        }
-      }
-    }
-  },
-  "xwayland": {
-    "description": "X server for running X clients under Wayland",
-    "distributions": {
-      "debian": {
-        "trixie": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/xwayland_24.1.6-91_arm64.deb"
-        }
-      },
-      "ubuntu": {
-        "resolute": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/xwayland_24.1.10-91_arm64.deb"
-        }
-      }
-    }
-  },
-  "weston": {
-    "description": "reference implementation of a wayland compositor",
-    "distributions": {
-      "debian": {
-        "trixie": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/weston_anland-5.13-debian-14.0.2-92.zip"
-        }
-      },
-      "ubuntu": {
-        "resolute": {
-            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.2/weston_anland-5.13-ubuntu-14.0.2-92.zip"
-        }
-      }
-    }
-  },
   "mesa": {
     "description": "Mesa 3D graphics library",
     "distributions": {
@@ -55,6 +10,66 @@
       "ubuntu": {
         "resolute": {
             "arm64": "https://github.com/lfdevs/mesa-for-android-container/releases/download/mesa-26.2.0-devel-20260709/mesa-for-android-container_26.2.0-devel-20260709_ubuntu_resolute_arm64.tar.gz"
+        }
+      }
+    }
+  },
+  "xwayland": {
+    "description": "X server for running X clients under Wayland",
+    "distributions": {
+      "debian": {
+        "trixie": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/xwayland_24.1.6-91_arm64.deb"
+        }
+      },
+      "ubuntu": {
+        "resolute": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/xwayland_24.1.10-91_arm64.deb"
+        }
+      }
+    }
+  },
+  "kwin": {
+    "description": "KDE window manager, Wayland version",
+    "distributions": {
+      "debian": {
+        "trixie": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/kwin_anland-5.13-debian-4_6.3.6-95.zip"
+        }
+      },
+      "ubuntu": {
+        "resolute": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/kwin_anland-5.13-4_6.6.4-0ubuntu95.zip"
+        }
+      }
+    }
+  },
+  "mutter": {
+    "description": "A Wayland display server library",
+    "distributions": {
+      "debian": {
+        "trixie": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/mutter_anland-5.13-debian-48.7-91.zip"
+        }
+      },
+      "ubuntu": {
+        "resolute": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/mutter_anland-5.13-50.1-0ubuntu91.zip"
+        }
+      }
+    }
+  },
+  "weston": {
+    "description": "reference implementation of a wayland compositor",
+    "distributions": {
+      "debian": {
+        "trixie": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/weston_anland-5.13-debian-14.0.2-92.zip"
+        }
+      },
+      "ubuntu": {
+        "resolute": {
+            "arm64": "https://github.com/lfdevs/anland-termux/releases/download/5.13.3/weston_anland-5.13-ubuntu-14.0.2-92.zip"
         }
       }
     }
