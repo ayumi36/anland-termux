@@ -1,0 +1,32 @@
+name: Performance report
+description: Share how this project works on your device
+title: "[Performance]: "
+labels: ["performance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to test and share how this project works on your device!
+  - type: input
+    id: model
+    attributes:
+      label: Device model
+      description: "What is the model of the device you use to run Anland: Termux?"
+      placeholder: ex. Xiaomi 17 Ultra
+    validations:
+      required: true
+  - type: input
+    id: cpu
+    attributes:
+      label: Processor model
+      description: "What is the processor model of the device you use to run Anland: Termux?"
+      placeholder: ex. Snapdragon 8 Elite Gen 5
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: User Experience
+      description: "Please describe your user experience on Anland: Termux."
+    validations:
+      required: true

@@ -1,0 +1,28 @@
+name: Feature request
+description: Request a new feature
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this form! **We cannot guarantee that requested features will be added** -- even if a feature can be implemented, it may take several months because we can only work on development in our spare time.
+
+        If your device can run Chroot / Droidspaces containers, please prioritize submitting a feature request to [upstream Anland](https://github.com/superturtlee/anland) (if upstream also does not have this feature).
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      description: Before submitting a feature request, please confirm the following items.
+      options:
+        - label: "I confirm that the requested feature is related to Anland: Termux."
+          required: true
+        - label: "I understand that the requested feature may not be added."
+          required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature description
+      description: Please describe the feature you are requesting, including the reason, possible reference implementations, and other relevant details.
+    validations:
+      required: true

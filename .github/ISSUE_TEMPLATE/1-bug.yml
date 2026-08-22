@@ -1,0 +1,73 @@
+name: Bug report
+description: Create a report to help us improve
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report! This will be very helpful for us in resolving the issue. **Please be patient, do not expect that issue could get resolved immediately.**
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      description: Before submitting an issue, please confirm the following items.
+      options:
+        - label: "I have followed the steps in the [User Guide](https://github.com/lfdevs/anland-termux/blob/termux/docs/user-guide.md) for downloading, installing, and using Anland: Termux."
+          required: true
+        - label: I have updated to the [latest version](https://github.com/lfdevs/anland-termux/releases/latest) and reinstalled the latest versions of all components, such as the Termux Daemon, Mesa, XWayland, KWin, and the `startplasma-anland.sh` script.
+          required: true
+  - type: input
+    id: cpu
+    attributes:
+      label: Processor model
+      description: "What is the processor model of the device you use to run Anland: Termux?"
+      placeholder: ex. Snapdragon 8 Elite Gen 5
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: In which runtime environment did you encounter this issue?
+      options:
+        - Termux Native
+        - PRoot container
+        - Chroot container
+        - LXC container
+        - Droidspaces container
+    validations:
+      required: true
+  - type: dropdown
+    id: distro
+    attributes:
+      label: In which Linux distribution (or Termux Native) did you encounter this issue?
+      options:
+        - Termux Native
+        - Debian 13
+        - Ubuntu 26.04
+    validations:
+      required: true
+  - type: dropdown
+    id: compositor
+    attributes:
+      label: In which Wayland compositor (or desktop environment) did you encounter this issue?
+      options:
+        - KWin (KDE Plasma)
+        - Weston
+        - Mutter (GNOME)
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue description
+      description: Please describe the issue you encountered, including reproduction steps if applicable. You may also provide additional information, such as environment details not listed above.
+    validations:
+      required: true
+  - type: upload
+    id: attachment
+    attributes:
+      label: Upload attachments
+      description: Please provide relevant attachments, such as logs, screenshots, or screen recordings, whenever possible. Instructions for collecting logs are available at https://github.com/lfdevs/anland-termux/discussions/9
+    validations:
+      required: false
