@@ -205,7 +205,7 @@ echo $TERMUX_APP__APK_RELEASE
    KDE Plasma：[startplasma-anland.sh](../scripts/startplasma-anland.sh)
 
    ```sh
-   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startplasma-anland.sh
+   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/main/scripts/startplasma-anland.sh
    chmod +x ./startplasma-anland.sh
    ./startplasma-anland.sh
    ```
@@ -213,7 +213,7 @@ echo $TERMUX_APP__APK_RELEASE
    Weston：[startweston-anland.sh](../scripts/startweston-anland.sh)
 
    ```sh
-   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startweston-anland.sh
+   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/main/scripts/startweston-anland.sh
    chmod +x ./startweston-anland.sh
    ./startweston-anland.sh
    ```
@@ -221,7 +221,7 @@ echo $TERMUX_APP__APK_RELEASE
    GNOME：[startgnome-anland.sh](../scripts/startgnome-anland.sh)
 
    ```sh
-   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/termux/scripts/startgnome-anland.sh
+   curl -LO https://github.com/lfdevs/anland-termux/raw/refs/heads/main/scripts/startgnome-anland.sh
    chmod +x ./startgnome-anland.sh
    ./startgnome-anland.sh
    ```

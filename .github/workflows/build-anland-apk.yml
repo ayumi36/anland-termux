@@ -3,7 +3,7 @@ name: Build Anland APK
 on:
   pull_request:
     branches:
-      - termux
+      - main
     paths:
       - "app/**"
       - "packages/anland/**"
@@ -15,7 +15,7 @@ on:
       ref:
         description: "Git ref to build"
         required: true
-        default: "termux"
+        default: "main"
 
 permissions:
   contents: read

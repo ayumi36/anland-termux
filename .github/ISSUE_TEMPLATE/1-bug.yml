@@ -13,7 +13,7 @@ body:
       label: Confirmation
       description: Before submitting an issue, please confirm the following items.
       options:
-        - label: "I have followed the steps in the [User Guide](https://github.com/lfdevs/anland-termux/blob/termux/docs/user-guide.md) for downloading, installing, and using Anland: Termux."
+        - label: "I have followed the steps in the [User Guide](https://github.com/lfdevs/anland-termux/blob/main/docs/user-guide.md) for downloading, installing, and using Anland: Termux."
           required: true
         - label: I have updated to the [latest version](https://github.com/lfdevs/anland-termux/releases/latest) and reinstalled the latest versions of all components, such as the Termux Daemon, Mesa, XWayland, KWin, and the `startplasma-anland.sh` script.
           required: true
