@@ -1,0 +1,40 @@
+name: Build Android 10 ARM64 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [android10-api29]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "9.6.0"
+      - name: Install Android build dependencies
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;29.0.14206865" "cmake;3.22.1"
+      - name: Check native fallback behavior
+        run: bash tests/host/run.sh
+      - name: Lint and build standard GitHub-Termux APK
+        run: tools/build-app.sh
+      - name: Verify signature, manifest, ARM64 and API 29 native symbols
+        run: python3 tools/verify-api29-apk.py out/AnlandTermux-5.13.3-api29.apk
+      - uses: actions/upload-artifact@v7
+        with:
+          name: AnlandTermux-5.13.3-api29-arm64-standard
+          path: |
+            out/AnlandTermux-5.13.3-api29.apk
+            out/api29-verification.txt
+          if-no-files-found: error
+          retention-days: 30
