@@ -1,5 +1,6 @@
 package com.anland.termux;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -295,6 +296,8 @@ public class SettingsActivity extends Activity {
         setContent(root);
     }
 
+    // This activity opts out of predictive back in AndroidManifest.xml.
+    @SuppressLint("GestureBackNavigation")
     @Override
     public void onBackPressed() {
         // While listening for a key binding, let onKeyDown capture the Back key

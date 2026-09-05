@@ -1,6 +1,7 @@
 package com.anland.termux;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AppOpsManager;
 import android.app.Notification;
@@ -240,6 +241,8 @@ public class MainActivity extends Activity
         Native.nativeSetCustomResolution(customW, customH);
     }
 
+    // API 33+ uses RECEIVER_EXPORTED; only older Android versions use the legacy overload.
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private void registerCompatibleReceiver() {
         if (!BuildConfig.COMPATIBLE || compatibleReceiverRegistered)
             return;
@@ -1247,6 +1250,8 @@ public class MainActivity extends Activity
     // Keep this empty (same approach as Termux-X11): the actual Back key
     // handling lives in onKeyDown(); this override simply prevents the
     // system from finishing the activity via gesture navigation.
+    // This activity opts out of predictive back in AndroidManifest.xml.
+    @SuppressLint("GestureBackNavigation")
     @Override
     public void onBackPressed() {
     }
@@ -1342,6 +1347,8 @@ public class MainActivity extends Activity
     }
 
     // Returns null when the event is not one of the configurable user actions.
+    // The manifest opts out of predictive back to retain configurable Back key forwarding.
+    @SuppressLint("GestureBackNavigation")
     private Boolean handleConfiguredUserAction(KeyEvent event) {
         String action;
         int keyCode = event.getKeyCode();
