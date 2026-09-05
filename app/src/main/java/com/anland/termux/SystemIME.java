@@ -6,7 +6,6 @@ import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -354,7 +353,7 @@ public final class SystemIME {
 
     boolean isImeVisible() {
         WindowInsets insets = activity.getWindow().getDecorView().getRootWindowInsets();
-        return insets != null && insets.isVisible(WindowInsets.Type.ime());
+        return PlatformCompat.imeVisible(insets, activity.getWindow().getDecorView());
     }
 
     void releaseHiddenInput() {
@@ -390,9 +389,7 @@ public final class SystemIME {
         // The insets API is the explicit user-driven show path on Android 11+
         // and later. Keep IMM below as a compatibility/focus-registration
         // fallback for devices that do not hand the view a controller yet.
-        WindowInsetsController controller = hiddenInput.getWindowInsetsController();
-        if (controller == null) controller = activity.getWindow().getInsetsController();
-        if (controller != null) controller.show(WindowInsets.Type.ime());
+        PlatformCompat.requestIme(activity.getWindow(), hiddenInput);
 
         // showSoftInput() returns false when the view has not reached IMM's
         // served-view state. In that case ResultReceiver is not guaranteed to

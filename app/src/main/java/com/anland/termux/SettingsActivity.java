@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
-import android.graphics.Insets;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -18,7 +17,6 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -138,15 +136,7 @@ public class SettingsActivity extends Activity {
         // inset handling and pad the scrollable content by the system-bar + IME
         // insets ourselves, so the ScrollView can scroll the focused field above
         // the keyboard. Base padding (dp(24)) is preserved on all edges.
-        getWindow().setDecorFitsSystemWindows(false);
-        final int base = dp(24);
-        content.setOnApplyWindowInsetsListener((v, insets) -> {
-            Insets in = insets.getInsets(
-                WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
-            v.setPadding(base + in.left, base + in.top,
-                         base + in.right, base + in.bottom);
-            return insets;
-        });
+        PlatformCompat.configureSettings(getWindow(), content, dp(24));
     }
 
     private void showHome() {
@@ -1165,8 +1155,7 @@ public class SettingsActivity extends Activity {
     // Scales the device panel by `f`, normalised to landscape (long side = width)
     // and rounded down to even dimensions, which compositors/encoders expect.
     private int[] scaleScreen(float f) {
-        WindowManager wm = (WindowManager) getSystemService(WINDOW_SERVICE);
-        Rect b = wm.getMaximumWindowMetrics().getBounds();
+        Rect b = PlatformCompat.maximumDisplayBounds(this);
         int longSide = Math.max(b.width(), b.height());
         int shortSide = Math.min(b.width(), b.height());
         int w = Math.round(longSide * f) & ~1;

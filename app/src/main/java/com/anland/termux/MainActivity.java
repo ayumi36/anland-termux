@@ -38,7 +38,6 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowInsets;
-import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
@@ -197,7 +196,7 @@ public class MainActivity extends Activity
             @Override public void onDisplayAdded(int displayId) {}
             @Override public void onDisplayRemoved(int displayId) {}
             @Override public void onDisplayChanged(int displayId) {
-                Display d = getDisplay();
+                Display d = PlatformCompat.display(MainActivity.this);
                 if (d != null && d.getDisplayId() == displayId)
                     pushRefreshRate();
             }
@@ -206,13 +205,15 @@ public class MainActivity extends Activity
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (hasFocus && Build.VERSION.SDK_INT < Build.VERSION_CODES.R)
+            setupFullscreen();
         if (hasFocus && clipboard != null) {
             clipboard.pushClipboard();
         }
     }
 
     private void pushRefreshRate() {
-        Display d = getDisplay();
+        Display d = PlatformCompat.display(this);
         if (d != null)
             Native.nativeSetRefreshRate(d.getRefreshRate());
     }
@@ -298,7 +299,7 @@ public class MainActivity extends Activity
         // Take over inset handling: the IME insets are dispatched to our
         // OnApplyWindowInsetsListener (so we can resize the surface) instead of
         // the system auto-panning the fullscreen window.
-        getWindow().setDecorFitsSystemWindows(false);
+        PlatformCompat.configureDisplayWindow(getWindow());
 
         surfaceView = new SurfaceView(this);
         surfaceView.setFocusable(true);
@@ -393,17 +394,15 @@ public class MainActivity extends Activity
             // settling. That dispatch can arrive between requestFocus() and
             // showSoftInput(), and disabling the target there makes the first
             // bound-key press appear to do nothing.
-            boolean imeWasVisible = mImeBottom > 0;
-            if (!insets.isVisible(WindowInsets.Type.ime()) && imeWasVisible) {
-                View focused = getCurrentFocus();
-                systemIme.releaseHiddenInput();
-                if (focused == systemIme.getInputView() || getCurrentFocus() == null)
-                    surfaceView.requestFocus();
-            }
-            applyDisplaySafeInsets(insets);
-            applyImeInset(insets);
+            handleWindowInsets(insets);
             return v.onApplyWindowInsets(insets);
         });
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            // OEM fullscreen windows may only signal a visible-frame change.
+            // This listener belongs to the root and dies with the Activity.
+            root.getViewTreeObserver().addOnGlobalLayoutListener(() ->
+                handleWindowInsets(root.getRootWindowInsets()));
+        }
 
         setupFullscreen();
         setupCursorHiding();
@@ -540,20 +539,16 @@ public class MainActivity extends Activity
     }
 
     private void setupFullscreen() {
-        WindowInsetsController ctrl = getWindow().getInsetsController();
-        if (ctrl != null) {
-            ctrl.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
-            ctrl.setSystemBarsBehavior(
-                WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-        }
+        PlatformCompat.hideSystemBars(getWindow());
         WindowManager.LayoutParams attrs = getWindow().getAttributes();
         attrs.layoutInDisplayCutoutMode = DisplayCutoutMode.hidesCutout(mDisplayCutoutMode)
-            ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            ? PlatformCompat.immersiveCutoutMode()
             : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER;
         getWindow().setAttributes(attrs);
     }
 
     private void applyDisplaySafeInsets(WindowInsets insets) {
+        if (insets == null) return;
         Insets cutout = Insets.NONE;
         // Android 15+ forces full-screen apps targeting API 35+ into cutout areas,
         // even when NEVER is requested. Recreate Termux:X11's safe layout manually.
@@ -609,7 +604,7 @@ public class MainActivity extends Activity
         // bottom safe inset there would leave a black strip between the desktop
         // (or extra-keys bar) and the keyboard. Use this dispatch's IME state,
         // rather than mImeBottom, because it has not been updated yet.
-        if (!mKeyboardFloating && insets.isVisible(WindowInsets.Type.ime())) {
+        if (!mKeyboardFloating && PlatformCompat.imeVisible(insets, mRoot)) {
             safeInsets = Insets.of(safeInsets.left, safeInsets.top, safeInsets.right, 0);
         }
 
@@ -983,8 +978,20 @@ public class MainActivity extends Activity
     // surfaceChanged -> nativeStart and the producer's resize path, so the
     // focused window relayouts into the upper region instead of hiding behind
     // the keyboard. Reset when the IME goes away.
+    private void handleWindowInsets(WindowInsets insets) {
+        boolean imeWasVisible = mImeBottom > 0;
+        if (!PlatformCompat.imeVisible(insets, mRoot) && imeWasVisible) {
+            View focused = getCurrentFocus();
+            systemIme.releaseHiddenInput();
+            if (focused == systemIme.getInputView() || getCurrentFocus() == null)
+                surfaceView.requestFocus();
+        }
+        applyDisplaySafeInsets(insets);
+        applyImeInset(insets);
+    }
+
     private void applyImeInset(WindowInsets insets) {
-        int newImeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
+        int newImeBottom = PlatformCompat.imeBottom(insets, mRoot);
         boolean imeVisible = newImeBottom > 0;
         boolean wasImeVisible = mImeBottom > 0;
 
@@ -1888,7 +1895,7 @@ public class MainActivity extends Activity
         String transform = mCapturedPointerTransform;
         if ("at".equals(transform)) {
             if ((source & InputDevice.SOURCE_TOUCHPAD) == InputDevice.SOURCE_TOUCHPAD) {
-                Display display = getDisplay();
+                Display display = PlatformCompat.display(this);
                 int rotation = display != null ? display.getRotation() : Surface.ROTATION_0;
                 if (rotation == Surface.ROTATION_90)
                     transform = "cc";
