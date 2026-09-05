@@ -13,6 +13,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#ifdef __ANDROID__
+#include <android/sharedmem.h>
+#include <fcntl.h>
+#endif
+
 struct display_ctx {
     int      ctrl_fd;
     int      data_fd;
@@ -94,7 +99,11 @@ void handle_resource_request(struct display_ctx *ctx, struct OutputEvent *event)
     for(i=0;i<ctx->num_services;i++){
         if(ctx->services[i].type == service_type){
             //if failed fds=NULL, num=0
-            struct resources res = ctx->services[i].allocate_resource(event->resources_request.args);
+            // Wire events are packed; callbacks must receive aligned uint32_t
+            // arguments on ARM64. Copying leaves the wire representation intact.
+            uint32_t args[3];
+            memcpy(args, event->resources_request.args, sizeof(args));
+            struct resources res = ctx->services[i].allocate_resource(args);
             if (ctx->resources[i].type != -1) {
                 // free previous resource if it was allocated
                 ctx->services[i].free_resource(ctx->resources[i]);
@@ -137,6 +146,22 @@ void free_resources(struct display_ctx *ctx){//释放资源，保留服务信息
 }
 static int create_shm(display_ctx *ctx)
 {
+#ifdef __ANDROID__
+    /* Bionic exports memfd_create only from API 30. Do not call the raw
+     * syscall on API 29: older kernel/seccomp combinations can reject it.
+     * ASharedMemory_create (API 26) chooses the platform's supported backing.
+     * The peer only mmaps this four-byte buffer; fd order and wire data stay
+     * unchanged. Unlike memfd, an ashmem fd must not be sized by ftruncate. */
+    ctx->shm_fd = ASharedMemory_create("buf_select", sizeof(uint32_t));
+    if (ctx->shm_fd < 0)
+        return -1;
+    int flags = fcntl(ctx->shm_fd, F_GETFD);
+    if (flags < 0 || fcntl(ctx->shm_fd, F_SETFD, flags | FD_CLOEXEC) < 0) {
+        close(ctx->shm_fd);
+        ctx->shm_fd = -1;
+        return -1;
+    }
+#else
     ctx->shm_fd = memfd_create("buf_select", MFD_CLOEXEC);
     if (ctx->shm_fd < 0)
         return -1;
@@ -145,6 +170,7 @@ static int create_shm(display_ctx *ctx)
         ctx->shm_fd = -1;
         return -1;
     }
+#endif
     ctx->shm_ptr = mmap(NULL, sizeof(uint32_t), PROT_READ | PROT_WRITE,
                         MAP_SHARED, ctx->shm_fd, 0);
     if (ctx->shm_ptr == MAP_FAILED) {
