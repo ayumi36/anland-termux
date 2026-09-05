@@ -16,8 +16,9 @@ target_include_directories(anland_consumer PRIVATE
     ${ANLAND_CORE_DIR}/common
 )
 
-target_compile_options(anland_consumer PRIVATE -O3 -flto)
-target_link_options(anland_consumer PRIVATE -flto -fuse-ld=lld)
+target_compile_options(anland_consumer PRIVATE -O3 -flto
+    -Werror=implicit-function-declaration -Werror=unguarded-availability)
+target_link_options(anland_consumer PRIVATE -flto -fuse-ld=lld -Wl,--no-undefined)
 
 target_link_libraries(anland_consumer
     android

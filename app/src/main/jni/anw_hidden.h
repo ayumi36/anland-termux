@@ -3,6 +3,8 @@
 
 #include <android/native_window.h>
 #include <dlfcn.h>
+#include <errno.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* Query constants */
@@ -55,6 +57,7 @@ typedef struct ANativeWindowBuffer {
 
 /* perform() ops / API ids (AOSP system/window.h) */
 enum {
+    ANW_SET_BUFFER_COUNT = 4,
     ANW_API_CONNECT    = 13,
     ANW_API_DISCONNECT = 14,
     ANW_API_CPU        = 2,
@@ -84,16 +87,34 @@ struct anw_window {
     int (*cancelBuffer)(struct anw_window *, ANativeWindowBuffer *, int fenceFd);
 };
 
+/* These layouts are also present in Android 10's nativebase/system/window.h.
+ * Validate before dereferencing an OEM operation table. A vendor ABI mismatch
+ * must fail cleanly rather than calling an arbitrary address. */
+static inline int anw_window_valid(const ANativeWindow *w)
+{
+    const struct anw_window *aw = (const struct anw_window *)w;
+    return aw && aw->common.magic == 0x5f776e64 /* '_wnd' */
+        && aw->common.version == sizeof(struct anw_window)
+        && aw->perform && aw->query && aw->dequeueBuffer
+        && aw->queueBuffer && aw->cancelBuffer;
+}
+
+#if UINTPTR_MAX == UINT64_MAX
+_Static_assert(sizeof(struct anw_window) == 192, "ARM64 native window ABI");
+_Static_assert(offsetof(ANativeWindowBuffer, handle) == 96, "ARM64 buffer handle ABI");
+_Static_assert(sizeof(ANativeWindowBuffer) == 168, "ARM64 native buffer ABI");
+#endif
+
 static inline int anw_api_connect(ANativeWindow *w, int api)
 {
     struct anw_window *aw = (struct anw_window *)w;
-    return aw->perform(aw, ANW_API_CONNECT, api);
+    return anw_window_valid(w) ? aw->perform(aw, ANW_API_CONNECT, api) : -ENOSYS;
 }
 
 static inline int anw_api_disconnect(ANativeWindow *w, int api)
 {
     struct anw_window *aw = (struct anw_window *)w;
-    return aw->perform(aw, ANW_API_DISCONNECT, api);
+    return anw_window_valid(w) ? aw->perform(aw, ANW_API_DISCONNECT, api) : -ENOSYS;
 }
 
 /* Hidden API function pointers, resolved via dlsym */
@@ -111,21 +132,54 @@ struct anw_api {
     pfn_ANativeWindow_cancelBuffer   cancelBuffer;
 };
 
+/* The wrappers are VNDK exports, not guaranteed public NDK symbols. When an
+ * OEM omits an export, use the same checked operation table that the wrappers
+ * call. This keeps dma-buf GPU rendering and fence-fd ownership unchanged. */
+static inline int anw_set_buffer_count(ANativeWindow *w, size_t count)
+{
+    struct anw_window *aw = (struct anw_window *)w;
+    return anw_window_valid(w) ? aw->perform(aw, ANW_SET_BUFFER_COUNT, count) : -ENOSYS;
+}
+
+static inline int anw_query(const ANativeWindow *w, int what, int *value)
+{
+    const struct anw_window *aw = (const struct anw_window *)w;
+    return anw_window_valid(w) ? aw->query(aw, what, value) : -ENOSYS;
+}
+
+static inline int anw_dequeue_buffer(ANativeWindow *w, ANativeWindowBuffer **buffer, int *fence)
+{
+    struct anw_window *aw = (struct anw_window *)w;
+    return anw_window_valid(w) ? aw->dequeueBuffer(aw, buffer, fence) : -ENOSYS;
+}
+
+static inline int anw_queue_buffer(ANativeWindow *w, ANativeWindowBuffer *buffer, int fence)
+{
+    struct anw_window *aw = (struct anw_window *)w;
+    return anw_window_valid(w) ? aw->queueBuffer(aw, buffer, fence) : -ENOSYS;
+}
+
+static inline int anw_cancel_buffer(ANativeWindow *w, ANativeWindowBuffer *buffer, int fence)
+{
+    struct anw_window *aw = (struct anw_window *)w;
+    return anw_window_valid(w) ? aw->cancelBuffer(aw, buffer, fence) : -ENOSYS;
+}
+
 static inline int anw_api_load(struct anw_api *api)
 {
     void *lib = dlopen("libnativewindow.so", RTLD_NOW);
-    if (!lib)
-        return -1;
+    api->setBufferCount = lib ? (pfn_ANativeWindow_setBufferCount) dlsym(lib, "ANativeWindow_setBufferCount") : NULL;
+    api->query          = lib ? (pfn_ANativeWindow_query)          dlsym(lib, "ANativeWindow_query") : NULL;
+    api->dequeueBuffer  = lib ? (pfn_ANativeWindow_dequeueBuffer)  dlsym(lib, "ANativeWindow_dequeueBuffer") : NULL;
+    api->queueBuffer    = lib ? (pfn_ANativeWindow_queueBuffer)    dlsym(lib, "ANativeWindow_queueBuffer") : NULL;
+    api->cancelBuffer   = lib ? (pfn_ANativeWindow_cancelBuffer)   dlsym(lib, "ANativeWindow_cancelBuffer") : NULL;
 
-    api->setBufferCount = (pfn_ANativeWindow_setBufferCount) dlsym(lib, "ANativeWindow_setBufferCount");
-    api->query          = (pfn_ANativeWindow_query)          dlsym(lib, "ANativeWindow_query");
-    api->dequeueBuffer  = (pfn_ANativeWindow_dequeueBuffer)  dlsym(lib, "ANativeWindow_dequeueBuffer");
-    api->queueBuffer    = (pfn_ANativeWindow_queueBuffer)    dlsym(lib, "ANativeWindow_queueBuffer");
-    api->cancelBuffer   = (pfn_ANativeWindow_cancelBuffer)   dlsym(lib, "ANativeWindow_cancelBuffer");
-
-    if (!api->setBufferCount || !api->query ||
-        !api->dequeueBuffer || !api->queueBuffer || !api->cancelBuffer)
-        return -1;
+    if (!api->setBufferCount) api->setBufferCount = anw_set_buffer_count;
+    if (!api->query)          api->query = anw_query;
+    if (!api->dequeueBuffer)  api->dequeueBuffer = anw_dequeue_buffer;
+    if (!api->queueBuffer)    api->queueBuffer = anw_queue_buffer;
+    if (!api->cancelBuffer)   api->cancelBuffer = anw_cancel_buffer;
+    /* Keep lib open for the lifetime of the stored function pointers. */
 
     return 0;
 }

@@ -433,16 +433,26 @@ static int do_connect(struct consumer_state *s)
         return -1;
     }
 
-    ANativeWindow_setBuffersGeometry(win, s->screen_w, s->screen_h,
-                                     AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM);
+    int status = ANativeWindow_setBuffersGeometry(win, s->screen_w, s->screen_h,
+                                                AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM);
+    if (status != 0) {
+        LOGE("ANativeWindow_setBuffersGeometry failed: %d", status);
+        return -1;
+    }
 
     int min_undequeued = 0;
-    api.query(win, ANATIVEWINDOW_QUERY_MIN_UNDEQUEUED_BUFFERS, &min_undequeued);
+    status = api.query(win, ANATIVEWINDOW_QUERY_MIN_UNDEQUEUED_BUFFERS, &min_undequeued);
+    if (status != 0 || min_undequeued < 0 || min_undequeued > MAX_COLLECT_BUFS - 2) {
+        LOGE("native buffer count query unsupported: status=%d minimum=%d",
+             status, min_undequeued);
+        return -1;
+    }
     int total = min_undequeued + 2;
-    if (total > MAX_COLLECT_BUFS)
-        total = MAX_COLLECT_BUFS;
-
-    api.setBufferCount(win, total);
+    status = api.setBufferCount(win, total);
+    if (status != 0) {
+        LOGE("ANativeWindow_setBufferCount(%d) failed: %d", total, status);
+        return -1;
+    }
 
     s->buf_count = total;
     if (collect_dmabufs(s) < 0)
