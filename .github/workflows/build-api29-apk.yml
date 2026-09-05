@@ -30,6 +30,9 @@ jobs:
         run: bash tests/host/run.sh
       - name: Lint and build standard GitHub-Termux APK
         run: tools/build-app.sh
+      - name: Show lint diagnostics on build failure
+        if: failure()
+        run: find app/build -type f -name lint-results-standardDebug.txt -exec cat {} +
       - name: Verify signature, manifest, ARM64 and API 29 native symbols
         run: python3 tools/verify-api29-apk.py out/AnlandTermux-5.13.3-api29.apk
       - uses: actions/upload-artifact@v7
