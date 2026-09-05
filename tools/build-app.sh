@@ -24,7 +24,7 @@ fi
 
 mkdir -p "$OUT_DIR"
 
-(cd "$ROOT_DIR/app" && gradle --no-daemon assembleStandardDebug)
+(cd "$ROOT_DIR/app" && gradle --no-daemon lintStandardDebug assembleStandardDebug)
 
 mapfile -t DEBUG_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/standard/debug" -maxdepth 1 -type f -name "*.apk" | sort)
 if [[ "${#DEBUG_APKS[@]}" -ne 1 ]]; then
