@@ -49,7 +49,7 @@ def main():
     badging = run(build_tools / "aapt2", "dump", "badging", apk)
     print("aapt2 dump badging output:")
     print(badging, end="" if badging.endswith("\n") else "\n")
-    min_sdk = re.search(r"(?:^|\s)sdkVersion:'([^']+)'(?:\s|$)", badging)
+    min_sdk = re.search(r"(?:^|\s)minSdkVersion:'([^']+)'(?:\s|$)", badging)
     if not min_sdk or min_sdk.group(1) != "29":
         actual = min_sdk.group(1) if min_sdk else "missing"
         raise SystemExit(f"APK minSdk must be exactly 29 (aapt2 reported {actual})")
