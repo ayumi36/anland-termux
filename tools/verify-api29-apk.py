@@ -47,8 +47,12 @@ def main():
     signature = run(build_tools / "apksigner", "verify", "--verbose", "--print-certs",
                     "--min-sdk-version", "29", apk)
     badging = run(build_tools / "aapt2", "dump", "badging", apk)
-    if not re.search(r"^sdkVersion:'29'$", badging, re.M):
-        raise SystemExit("APK minSdk must be exactly 29")
+    print("aapt2 dump badging output:")
+    print(badging, end="" if badging.endswith("\n") else "\n")
+    min_sdk = re.search(r"(?:^|\s)sdkVersion:'([^']+)'(?:\s|$)", badging)
+    if not min_sdk or min_sdk.group(1) != "29":
+        actual = min_sdk.group(1) if min_sdk else "missing"
+        raise SystemExit(f"APK minSdk must be exactly 29 (aapt2 reported {actual})")
     if not re.search(r"^package: name='com.anland.termux'", badging, re.M):
         raise SystemExit("Unexpected application ID")
     manifest = run(build_tools / "aapt2", "dump", "xmltree", apk, "--file", "AndroidManifest.xml")
