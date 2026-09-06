@@ -62,6 +62,8 @@ def main():
     # Linker stubs, not a hand-written allowlist, define API 29 availability.
     platform_symbols = set()
     for stub in stubs.glob("*.so"):
+        if stub.read_bytes()[:4] != b"\x7fELF":
+            continue
         platform_symbols.update(symbols(readelf, stub)[0])
 
     native_reports = []
